@@ -5,7 +5,7 @@ date: "1/4/2021"
 output: html_document
 ---
 
-Hadley Wickham's R for data science, Chapter 3 problems and notes
+Hadley Wickham's [R for data science](https://r4ds.had.co.nz/data-visualisation.html), Chapter 3 problems and notes
 ```{r Load libraries}
 library(ggplot2)
 library(tidyverse)
@@ -66,6 +66,8 @@ Cannot map a continuous variable to shape - produces an error.
 ```{r}
 ggplot(data = mpg) +
   geom_point(mapping = aes(x = displ, y = hwy, color = year))
+```
+```{r}
 ggplot(data = mpg) +
   geom_point(mapping = aes(x = displ, y = hwy, size = year))
 ```
@@ -94,7 +96,7 @@ ggplot(data = mpg) +
   geom_point(mapping = aes(x = displ, y = hwy, color = displ < 5))
 ```
 
-Facets.
+## Facets
 Advantage of facets vs. color/shape/size is that you can see all values
 without other data's values intruding on it.
 The disadvantage is that it may be difficult to compare against
@@ -161,7 +163,7 @@ ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) +
   geom_point(mapping = aes(color = drv), show.legend = FALSE)
 ```
 
-Specify different data for each layer
+## Specify different data for each layer
 ```{r}
 ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) +
   geom_point(mapping = aes(color = class)) +
@@ -192,7 +194,7 @@ ggplot(data = mpg, mapping = aes(x = displ, y = hwy, color = drv)) +
   geom_smooth(se = FALSE)
 ```
 
-Various ways of generating plots
+## Various ways of generating plots
 ```{r}
 ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) +
   geom_point() + 
@@ -225,4 +227,4 @@ ggplot(data = mpg, mapping = aes(x = displ, y = hwy, color = drv)) +
   geom_point()
 ```
 
-Statistical Transformations
+## Statistical Transformations
