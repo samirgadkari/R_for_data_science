@@ -1,0 +1,135 @@
+---
+title: "Ch_5_data_transforms"
+author: "Samir Gadkari"
+date: "1/5/2021"
+output: html_document
+---
+
+Hadley Wickham's [R for data science](https://r4ds.had.co.nz/data-visualisation.html), Chapter 5 problems and notes
+```{r Load libraries}
+library(nycflights13)
+library(tidyverse)
+```
+
+Since this is a large dataset, only a few rows are printed when you type
+flights in the console. To see all the rows, type View(flights) in the console.
+This will open the RStudio viewer.
+
+## dplyr basics
+
+Main functions in dplyr that allow you to manipulate the data:
+
+  * filter: pick observations by their name
+  * arrange: reorder 
+  * select: pick variables by their names
+  * mutate: create new variables with functions of existing variables
+  * summarise: collapse many values into a summary
+These functions used in conjunction with group_by (which changes the function
+scope to group level) allow all kinds of data manipulation.
+
+For all these functions:
+
+1. First argument is a dataframe;
+2. subsequent arguments describe what to do with the dataframe
+3. resulting in a new dataframe
+
+dplyr functions never modify the dataframe.
+You have to set it to a variable to capture the updated values.
+
+## Filter rows with filter()
+To print out the output of any code, surround it with parentheses.
+The line below saves the filter output to jan1 and prints out the
+value in jan1.
+```{r}
+(jan1 <- filter(flights, month == 1, day == 1)) # Multiple arguments are combined 
+                                                # with the and operation.
+                                                # Use logical operands &, |, !
+                                                # to combine using and, or, not.
+```
+When filtering, if a row produces FALSE, or NA, the row is dropped.
+To preserve NA values, you have to ask for them explicitly.
+```{r}
+(df <- tibble(x = c(1, NA, 3)))
+filter(df, x > 1)
+(filter(df, is.na(x) | x > 1))
+```
+
+### Comparisons
+
+When comparing two floating point numbers, use near()
+```{r}
+near(sqrt(2) ^ 2, 2)
+```
+
+### Logical operations
+
+```{r}
+filter(flights, month == 11 | month == 1) # Either month 11 or 1
+```
+
+The same can be achieved with the %in% operator
+```{r}
+filter(flights, month %in% c(11, 1))
+```
+You can compare two tibbles. The value of each tibble will be compared
+individually:
+```{r}
+x <- filter(flights, month == 11 | month == 1)
+x
+```
+
+```{r}
+x <- filter(flights, month == 11 | month == 1)
+y <- filter(flights, month %in% c(11, 1))
+all_equal(x, y)
+(x == y)[1, ]
+```
+
+### Missing values
+Any calculation that has a value of NA will produce an NA result.
+NA stands for "not available". Even NA == NA will result in NA.
+To determine if a value is NA, use is.na().
+Note that is.na will find NaN as well as NA.
+is.nan will find only NaN values.
+```{r}
+x <- NA
+# y <- 32
+is.na(x)
+# is.na(y)
+```
+Some calculations with NA in them will still work.
+This is because of shortcuts that the computer uses to do the calculation.
+```{r}
+(NA ^ 0)     # Anything raised to 0 is 1
+(NA | TRUE)  # Anything or-ed with TRUE is TRUE
+(FALSE & NA) # Anything an-ded with FALSE is FALSE
+(NA * 0)     # Output is NA, because 0 can be a number close to but not 0.
+             # So any tiny tiny number times NA should give NA.
+```
+
+### 5.2.4 Exercises
+Filtering exercises:
+```{r}
+(filter(flights, sched_arr_time - arr_time >= 120))
+(filter(flights, dest == 'HOU' | dest == 'IAH'))
+(filter(flights, carrier %in% c('UA', 'AA', 'DL')))
+
+(filter(flights, month %in% 7:9))       # One way to do this, and
+(filter(flights, between(month, 9, 9))) # another way to do it.
+
+(filter(flights, (sched_arr_time - arr_time >= 120) & dep_delay < 0))
+(filter(flights, (dep_delay > 60) & (sched_arr_time - arr_time < 30)))
+(filter(flights, dep_time <= 600))
+```
+
+```{r}
+# How many flights have a missing dep_time?
+(filter(flights, is.na(dep_time))) # There are 8255 rows with NA in dep_time.
+(sum(is.na(flights$dep_time)))     # Another way to do this without printing
+                                   # the tibble and reading number of rows.
+
+# Find number of missing values per variable
+(colSums(is.na(flights)))          # Best way to see number of missing values
+                                   # per variable.
+```
+
