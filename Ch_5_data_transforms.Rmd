@@ -133,3 +133,414 @@ Filtering exercises:
                                    # per variable.
 ```
 
+## Arrange rows with arrange()
+Missing values (NA) always show up at the end.
+```{r}
+(arrange(flights, year, month, day)) # will arrange rows by
+                                     #   year, then month, then day
+(arrange(flights, desc(dep_delay)))  # will arrange rows by descending dep_delay
+```
+```{r}
+df <- tibble(x = c(5, 2, NA))
+(arrange(df, x))
+(arrange(df, desc(x)))
+(arrange(df, !is.na(x), x))
+(arrange(df, !is.na(x), desc(x)))
+```
+### 5.3.1 Exercises
+```{r}
+df <- tibble(x = c(5, 2, NA))
+(arrange(df, !is.na(x), x))        # Shows NA values at the top, followed by
+                                   # ascending x values
+(arrange(df, !is.na(x), desc(x)))  # Shows NA values at the top, followed by
+                                   # descending x values
+(arrange(flights, desc(dep_delay)))  # Find most delayed flights
+(arrange(flights, dep_delay))      # Flights that left earliest
+(arrange(flights, desc(distance/air_time))) # Highest speed flights
+(arrange(flights, desc(distance))) # Furthest travelling flights
+(arrange(flights, distance))       # Shortest travelling flights
+```
+
+## Select columns with select()
+```{r}
+select(flights, year, month, day)  # Select given 3 variables
+select(flights, year:day)          # Select from year to day - 
+                                   # inclusive
+select(flights, -(year:day))       # Select everything but year:day
+```
+Helpful functions to use with select:
+* starts_with - matches names that start with the given string
+* ends_with   - matches names that end in the given string
+* contains    - matches names that contain the given string
+* matches     - uses a regex to match variable names
+* num_range('x', 1:3) - matches x1, x2, x3 variables
+
+You can try using select to rename variables, but it drops those
+variables not explicitly mentioned. Instead, use rename
+```{r}
+rename(flights, tail_num = tailnum) # Change tailnum -> tail_num
+```
+
+Use select in everything() to move select variables to start of the tibble.
+```{r}
+select(flights, time_hour, air_time, everything())
+```
+
+### 5.4.1 Exercises
+Brainstorm as many ways as possible to select dep_time, dep_delay, arr_time, and arr_delay from flights.
+```{r}
+select(flights, dep_time, dep_delay, arr_time, arr_delay)
+select(flights, all_of(c('dep_time', 'dep_delay', 
+                         'arr_time', 'arr_delay')))
+select(flights, dep_time, dep_delay, 
+       arr_time, arr_delay, 
+       everything())[ , c("dep_time", "dep_delay",
+                          "arr_time", "arr_delay")]
+```
+What happens if you include the name of a variable multiple times in a select() call?
+```{r}
+select(flights, year, year, month, month)
+```
+Nothing happens - we only get one instance of each variable.
+
+What does the any_of() function do? Why might it be helpful in conjunction with this vector?
+vars <- c("year", "month", "day", "dep_delay", "arr_delay")
+```{r}
+vars <- c("year", "month", "day", "dep_delay", "arr_delay")
+select(flights, -any_of(vars)) # any_of is useful to remove 
+                               # variables. If a variable is
+                               # missing from the tibble,
+                               # it does not throw any errors.
+
+# If any variables inside all_of are missing from the tibble,
+# an error is thrown
+select(flights, all_of(c('dep_time', 'dep_delay', 
+                         'arr_time', 'arr_delay')))
+```
+
+Does the result of running the following code surprise you? How do the select helpers deal with case by default? How can you change that default?
+```{r}
+select(flights, contains('TIME')) # This ignores case.
+
+# This does not ignore case. Since there is no variable with
+# uppercase TIME, nothing is selected.
+select(flights, contains('TIME', ignore.case = FALSE))
+```
+
+## Add new variables with mutate()
+Mutate adds new columns to the end. So let's create a small dataset.
+```{r}
+flights_sml <- select(flights, year:day, ends_with('delay'),
+                      distance, air_time)
+mutate(flights_sml, 
+       gain = dep_delay - arr_delay,
+       speed = distance / air_time * 60)
+
+mutate(flights_sml, 
+       gain = dep_delay - arr_delay,
+       hours = air_time / 60,
+       gain_per_hour = gain / hours) # Now you can use new variables
+```
+To keep only the new variables, use transmute()
+```{r}
+transmute(flights,
+          gain = dep_delay - arr_delay,
+          hours = air_time / 60,
+          gain_per_hour = gain / hours)
+```
+### Useful creation functions
+Any vectorized function can be used with mutate.
+A vectorized function takes and returns a vector with the same
+number of values.  These are:
+
+* Arithmetic operators (+, -, *, /, ^). If one part of the expression is a different size than the other, it is extended to the size of the largest variable in the operation.
+* Modular arithmetic (%/%, %%).
+  - %/% is integer division
+  - %% is remainder
+```{r}
+transmute(flights,
+          dep_time,
+          hour = dep_time %/% 100,   # integer divide by 100
+          minute = dep_time %% 100)  # remainder after div by 100
+```
+* Log operations (log, log2, log10)
+
+All else being equal, prefer log2 since it is easy to interpret:
+  - a difference of 1 on the log scale = doubling,
+  - a difference of -1 on the log scale = halving
+
+* Offsets (lead, lag)
+```{r}
+(x <- 1:10)
+lag(x)
+lead(x)
+```
+* Cummulative and rolling aggregates (cumsum, cumprod, cummin, cummax, cummean). To get rolling aggregates, try the RcppRoll package.
+```{r}
+x
+cumsum(x)
+cummean(x)
+```
+* Logical comparisons (<, <=, >, >=, ==, !=)
+* Ranking (start with min_rank, then try row_number, dense_rank, percent_rank, cume_dist, ntile).
+The default gives the smallest value the smallest rank. Use desc(x) to give largest value the smallest rank.
+```{r}
+(y <- c(1, 2, 2, NA, 3, 4))
+min_rank(y)        # same as rank(ties.method = min)
+                   # minimum rank assigned to all tied values
+                   # minimum rank assigned to smallest value
+min_rank(desc(y))  # same as rank(ties.method = min)
+                   # minimum rank assigned to all tied values
+                   # maximum rank assigned to smallest value
+row_number(y)      # same as rank(ties.method = first)
+                   # (y <- c(1, 2, 8, 8, 8, 2, 1)). row_number(y)
+                   # gives   1  3  5  6  7  4  2 rankings.
+dense_rank(y)      # dense_rank leaves no gaps between ranks.
+                   # same values get the same rank.
+percent_rank(y) # computed by scaling min rank to 0, max rank to 1
+cume_dist(y)    # proportion of all values <= current rank
+```
+
+### 5.5.2 Exercises
+Currently dep_time and sched_dep_time are convenient to look at, but hard to compute with because they’re not really continuous numbers. Convert them to a more convenient representation of number of minutes since midnight.
+```{r}
+dep_times <- select(flights, dep_time:sched_dep_time, 
+                    arr_time, air_time)
+time_to_minutes <- function(t) {
+  hour = t %/% 100
+  hour * 60 + (t - hour * 100) %% 60
+}
+dep_times <- mutate(dep_times,
+                    dep_time_in_min = time_to_minutes(dep_time),
+                    sched_dep_time_in_min = 
+                      time_to_minutes(sched_dep_time))
+```
+Compare air_time with arr_time - dep_time. What do you expect to see? What do you see? What do you need to do to fix it?
+
+air_time should equal arr_time - dep_time. It does not because
+the hundredth place of these times are in hours, and the remainder
+is in seconds. Instead, now that we've converted 
+```{r}
+dep_times <- mutate(dep_times,
+                    arr_time_in_min = time_to_minutes(arr_time))
+```
+Now you can see that the arr_time_in_minutes - dep_time_in_minutes
+is a little more than the air time. This probably does not include
+the sitting on the runway time, taxi to the runway time, etc.
+
+Find the 10 most delayed flights using a ranking function. How do you want to handle ties? Carefully read the documentation for min_rank().
+```{r}
+# min_rank handles ties by giving the same rank to same-valued
+# elements. Thus it skips a rank when ranking the next element.
+# If there are ties, there will be skipped numbers.
+# Any rank after 10 should be ignored.
+flights <- mutate(flights,
+                  largest_delays = 
+                    min_rank(desc(flights$arr_delay)))
+(largest_delays <- filter(flights, largest_delays <= 10))
+```
+
+What does 1:3 + 1:10 return? Why?
+
+1:3 is grown to 10 values so it can be added to the 1:10.
+The way it is grown is by repeating the same list
+over and over until all 10 elements have values in them.
+```{r}
+(1:3) + (1:10) == c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1) + (1:10)
+```
+
+## Grouped summaries with summarise()
+When grouping and creating summaries of the groups, it helps to
+use the pipe (%>%). It takes the output of the operation on
+the left, and passes it as the first argument to the operation
+on the right. Since filter, group_by, summarise, mutate, 
+and arrange all take a tibble as the first argument, we can use
+use %>% to connect our processing together:
+```{r}
+delays <- flights %>% 
+  group_by(dest) %>% 
+  summarise(
+    count = n(),  # n() gives the current group size. Useful to
+                  # ensure you're not drawing conclusions from
+                  # very small amounts of data.
+    dist = mean(distance, na.rm = TRUE), # na.rm removes NA values
+    delay = mean(arr_delay, na.rm = TRUE) # na.rm removes NA values
+  ) %>% 
+  filter(count > 20, dest != "HNL") # Honolulu is far from other
+                                    # airports, so exclude it.
+```
+```{r}
+not_cancelled <- flights %>%
+  filter(!is.na(dep_delay), !is.na(arr_delay)) # multiple filter operations are anded
+not_cancelled %>%
+  group_by(year, month, day) %>%
+  summarise(mean = mean(dep_delay))
+```
+
+Let's look at delays based on a planes' tailnum.
+```{r}
+delays <- not_cancelled %>%
+  group_by(tailnum) %>%
+  summarise(
+    delay = mean(arr_delay),
+    n = n()
+  )
+ggplot(delays, mapping = aes(x = delay)) +
+  geom_freqpoly(binwidth = 10)
+```
+There are a few planes with delays of 300 minutes = 5 hours.
+Let's draw a scatterplot to see if this conclusion can be made,
+or if there are nuances.
+```{r}
+ggplot(delays, mapping = aes(x = n, y = delay)) +
+  geom_point(alpha = 1/10)
+```
+This is a very characteristic plot of mean and group size. You will see
+that the variation in the variable decreases as group size increases.
+In this case, the more the number of flights, the less the variation.
+If you filter out groups with the smallest number of observations,
+you will see more of the pattern among the largest amount of data.
+```{r}
+delays %>%
+  filter(n >= 25) %>%
+  ggplot(mapping = aes(x = n, y = delay)) +
+    geom_point(alpha = 1/10)
+```
+
+### Baseball dataset
+Let's find the average performance of batters (batting average vs at bat).
+at bat is the number of times they get to hit the ball.
+```{r}
+batting <- as_tibble(Lahman::Batting)
+
+batters <- batting %>%
+  group_by(playerID) %>%
+  summarise(
+    ba = sum(H, na.rm = TRUE) / sum(AB, na.rm = TRUE),
+    ab = sum(AB, na.rm = TRUE)
+  )
+
+batters %>%
+  filter(ab > 100) %>%
+  ggplot(mapping = aes(x = ab, y = ba)) +
+    geom_point() +
+    geom_smooth(se = FALSE)
+```
+As before, the variation in our aggregate decreases as we get more data points.
+There is also a positive correlation between ab and ba. 
+This is because the team will pick the best players to be at bat.
+
+If you naively sort on desc(ba), you will see that people with the best batting
+averages are lucky, not skilled (look at their at bat).
+```{r}
+batters %>%
+  arrange(desc(ba))
+```
+
+### Useful summary functions
+* Measures of location
+  - mean
+  - median
+```{r}
+not_cancelled %>%
+  group_by(year, month, day) %>%
+  summarise(
+    avg_delay1 = mean(arr_delay),
+    avg_delay2 = mean(arr_delay[arr_delay > 0]) # avg +ve delay
+  )
+```
+
+* Measures of spread
+  - sd 
+  - IQR
+  - mad  (median absolute deviation - useful because it is more resilient
+    to outliers)
+```{r}
+not_cancelled %>%
+  group_by(dest) %>%
+  summarise(distance_sd = sd(distance)) %>%
+  arrange(desc(distance_sd))
+```
+* Measures of rank
+  - min
+  - quantile - quantile(x, 0.25) gives the 25% quantile
+  - max
+```{r}
+not_cancelled %>%
+  group_by(year, month, day) %>%
+  summarise(
+    first = min(dep_time),
+    last = max(dep_time)
+  )
+```
+
+* Measures of position
+  - first - same as x[1]
+  - nth   - usage: nth(x, 2), same as x[2]
+  - last  - same as x[length(x)]
+These work the same as subscripts, but
+you can specify a default value if none is found.
+```{r}
+not_cancelled %>%
+  group_by(year, month, day) %>%
+  summarise(
+    first_dep = first(dep_time),
+    last_dep = last(dep_time)
+  )
+```
+These functions are similar to filtering on rank,
+except filtering gives you all values in each group,
+not just the first and last.
+```{r}
+not_cancelled %>%
+  group_by(year, month, day) %>%           # group by year, month, day
+  mutate(r = min_rank(desc(dep_time))) %>% # rank by dep_time
+  filter(r %in% range(r))  # range(r) produces min(r) and max(r).
+                           # filter keeps only the min/max rank,
+                           # and removes all other rows in each group.
+```
+
+* Counts
+  - When summarising, use sum(!is.na(x)) to count non-missing values
+  - When summarizing, use n_distinct(x) to count distinct values
+  - You can also use count(x) to count number of values
+    in each distinct value of x. ex. count(dest) counts
+    the number of times each dest occurs in the dataset.
+    count(x, wt = y) gives the sum(y) for each value of x
+```{r}
+not_cancelled %>%
+  group_by(dest) %>%
+  summarise(carriers = n_distinct(carrier)) %>%
+  arrange(desc(carriers))
+```
+
+```{r}
+not_cancelled %>%
+  count(tailnum)
+```
+```{r}
+not_cancelled %>%
+  count(tailnum, wt = distance) # group_by(tailnum) %>%
+                                #   sum(distance).
+                                # Gives total distance
+                                # for each tailnum
+```
+* Counts and proportions of logical values
+  - sum(x > 10) - x > 10 creates a vector of TRUE/FALSE values,
+    and sum converts TRUE to 1 and FALSE to 0, thus telling you
+    how many values match x > 10
+  - mean(x > 10) - same as above, except mean produces a
+    proportion of values that match x > 10
+```{r}
+not_cancelled %>%
+  group_by(year, month, day) %>%
+  summarise(n_early = sum(dep_time < 500)) # number of early
+                                           # flights per day
+```
+What proportion of flights are delayed more than an hour?
+```{r}
+not_cancelled %>%
+  group_by(year, month, day) %>%
+  summarise(hour_prop = mean(arr_delay > 60))
+```
+
