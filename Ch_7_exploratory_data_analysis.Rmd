@@ -1,0 +1,57 @@
+---
+title: "Ch_7_exploratory_data_analysis.Rmd"
+author: "Samir Gadkari"
+date: "1/12/2021"
+output: html_document
+---
+
+Hadley Wickham's [R for data science](https://r4ds.had.co.nz/exploratory-data-analysis.html), Chapter 7 problems and notes
+```{r Load libraries}
+library(tidyverse)
+```
+
+Since this is a large dataset, only a few rows are printed when you type
+flights in the console. To see all the rows, type View(flights) in the console.
+We're going to explore our data through:
+  * variations within the variables
+  * covariations between variables
+
+## Variation
+
+You can use bar plots to find variations in categorical variables:
+```{r}
+# Variation as a plot:
+diamonds %>%
+  ggplot(aes(x = cut)) +
+  geom_bar()
+
+# Variation as a table:
+diamonds %>%
+  count(cut) %>%           # counts the number of each type
+  mutate(prop = n/sum(n))  # gives the proportion of each type
+```
+
+You can use histograms to find variations in continuous data:
+```{r}
+diamonds %>%
+  ggplot(aes(x = carat)) +
+  geom_histogram(binwidth = 0.5) # You should explore data with different binwidths
+
+diamonds %>%
+  count(cut_width(carat, 
+                  0.5)) %>%  # width is required for cut_width
+  mutate(prop = n / sum(n))
+```
+
+To overlay multiple histograms, use geom_freqpoly(). It uses a different
+colored line for each histogram, and so is easier to understand.
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, color = cut)) +
+  geom_freqpoly(binwidth = 0.1)
+```
+
+### Typical values
+
+  * Which values are the most common? Why?
+  * Which values are rare? Why? Does that match your expectations?
+  * Can you see any unusual patterns? What might explain them?
