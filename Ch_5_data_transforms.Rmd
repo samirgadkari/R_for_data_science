@@ -173,11 +173,11 @@ select(flights, year:day)          # Select from year to day -
 select(flights, -(year:day))       # Select everything but year:day
 ```
 Helpful functions to use with select:
-* starts_with - matches names that start with the given string
-* ends_with   - matches names that end in the given string
-* contains    - matches names that contain the given string
-* matches     - uses a regex to match variable names
-* num_range('x', 1:3) - matches x1, x2, x3 variables
+  * starts_with - matches names that start with the given string
+  * ends_with   - matches names that end in the given string
+  * contains    - matches names that contain the given string
+  * matches     - uses a regex to match variable names
+  * num_range('x', 1:3) - matches x1, x2, x3 variables
 
 You can try using select to rename variables, but it drops those
 variables not explicitly mentioned. Instead, use rename
@@ -257,36 +257,36 @@ Any vectorized function can be used with mutate.
 A vectorized function takes and returns a vector with the same
 number of values.  These are:
 
-* Arithmetic operators (+, -, *, /, ^). If one part of the expression is a different size than the other, it is extended to the size of the largest variable in the operation.
-* Modular arithmetic (%/%, %%).
-  - %/% is integer division
-  - %% is remainder
+  * Arithmetic operators (+, -, *, /, ^). If one part of the expression is a different size than the other, it is extended to the size of the largest variable in the operation.
+  * Modular arithmetic (%/%, %%).
+    - %/% is integer division
+    - %% is remainder
 ```{r}
 transmute(flights,
           dep_time,
           hour = dep_time %/% 100,   # integer divide by 100
           minute = dep_time %% 100)  # remainder after div by 100
 ```
-* Log operations (log, log2, log10)
+  * Log operations (log, log2, log10)
 
 All else being equal, prefer log2 since it is easy to interpret:
   - a difference of 1 on the log scale = doubling,
   - a difference of -1 on the log scale = halving
 
-* Offsets (lead, lag)
+  * Offsets (lead, lag)
 ```{r}
 (x <- 1:10)
 lag(x)
 lead(x)
 ```
-* Cummulative and rolling aggregates (cumsum, cumprod, cummin, cummax, cummean). To get rolling aggregates, try the RcppRoll package.
+  * Cummulative and rolling aggregates (cumsum, cumprod, cummin, cummax, cummean). To get rolling aggregates, try the RcppRoll package.
 ```{r}
 x
 cumsum(x)
 cummean(x)
 ```
-* Logical comparisons (<, <=, >, >=, ==, !=)
-* Ranking (start with min_rank, then try row_number, dense_rank, percent_rank, cume_dist, ntile).
+  * Logical comparisons (<, <=, >, >=, ==, !=)
+  * Ranking (start with min_rank, then try row_number, dense_rank, percent_rank, cume_dist, ntile).
 The default gives the smallest value the smallest rank. Use desc(x) to give largest value the smallest rank.
 ```{r}
 (y <- c(1, 2, 2, NA, 3, 4))
@@ -442,9 +442,9 @@ batters %>%
 ```
 
 ### Useful summary functions
-* Measures of location
-  - mean
-  - median
+  * Measures of location
+    - mean
+    - median
 ```{r}
 not_cancelled %>%
   group_by(year, month, day) %>%
@@ -454,10 +454,10 @@ not_cancelled %>%
   )
 ```
 
-* Measures of spread
-  - sd 
-  - IQR
-  - mad  (median absolute deviation - useful because it is more resilient
+  * Measures of spread
+    - sd 
+    - IQR
+    - mad  (median absolute deviation - useful because it is more resilient
     to outliers)
 ```{r}
 not_cancelled %>%
@@ -465,10 +465,10 @@ not_cancelled %>%
   summarise(distance_sd = sd(distance)) %>%
   arrange(desc(distance_sd))
 ```
-* Measures of rank
-  - min
-  - quantile - quantile(x, 0.25) gives the 25% quantile
-  - max
+  * Measures of rank
+    - min
+    - quantile - quantile(x, 0.25) gives the 25% quantile
+    - max
 ```{r}
 not_cancelled %>%
   group_by(year, month, day) %>%
@@ -478,10 +478,10 @@ not_cancelled %>%
   )
 ```
 
-* Measures of position
-  - first - same as x[1]
-  - nth   - usage: nth(x, 2), same as x[2]
-  - last  - same as x[length(x)]
+  * Measures of position
+    - first - same as x[1]
+    - nth   - usage: nth(x, 2), same as x[2]
+    - last  - same as x[length(x)]
 These work the same as subscripts, but
 you can specify a default value if none is found.
 ```{r}
@@ -504,10 +504,10 @@ not_cancelled %>%
                            # and removes all other rows in each group.
 ```
 
-* Counts
-  - When summarising, use sum(!is.na(x)) to count non-missing values
-  - When summarizing, use n_distinct(x) to count distinct values
-  - You can also use count(x) to count number of values
+  * Counts
+    - When summarising, use sum(!is.na(x)) to count non-missing values
+    - When summarizing, use n_distinct(x) to count distinct values
+    - You can also use count(x) to count number of values
     in each distinct value of x. ex. count(dest) counts
     the number of times each dest occurs in the dataset.
     count(x, wt = y) gives the sum(y) for each value of x
@@ -529,11 +529,11 @@ not_cancelled %>%
                                 # Gives total distance
                                 # for each tailnum
 ```
-* Counts and proportions of logical values
-  - sum(x > 10) - x > 10 creates a vector of TRUE/FALSE values,
+  * Counts and proportions of logical values
+    - sum(x > 10) - x > 10 creates a vector of TRUE/FALSE values,
     and sum converts TRUE to 1 and FALSE to 0, thus telling you
     how many values match x > 10
-  - mean(x > 10) - same as above, except mean produces a
+    - mean(x > 10) - same as above, except mean produces a
     proportion of values that match x > 10
 ```{r}
 not_cancelled %>%
@@ -572,10 +572,10 @@ daily %>% ungroup() %>% summarise(flights = n()) # All flights
 
 Brainstorm at least 5 different ways to assess the typical delay characteristics of a group of flights. Consider the following scenarios:
 
-* A flight is 15 minutes early 50% of the time, and 15 minutes late 50% of the time.
-* A flight is always 10 minutes late.
-* A flight is 30 minutes early 50% of the time, and 30 minutes late 50% of the time.
-* 99% of the time a flight is on time. 1% of the time it’s 2 hours late.
+  * A flight is 15 minutes early 50% of the time, and 15 minutes late 50% of the time.
+  * A flight is always 10 minutes late.
+  * A flight is 30 minutes early 50% of the time, and 30 minutes late 50% of the time.
+  * 99% of the time a flight is on time. 1% of the time it’s 2 hours late.
 
 Which is more important: arrival delay or departure delay?
 ```{r}
@@ -760,41 +760,41 @@ popular_dest %>%
 
 Window functions work most naturally with grouped mutates and 
 grouped filters. Windows functions:
-* take all n values as input
-* returns all n values as output
+  * take all n values as input
+  * returns all n values as output
 
 There are five main families of window functions. Two families are unrelated to aggregation functions:
 
-* Ranking and ordering functions: row_number(), min_rank(), dense_rank(), cume_dist(), percent_rank(), and ntile(). These functions all take a vector to order by, and return various types of ranks.
+  * Ranking and ordering functions: row_number(), min_rank(), dense_rank(), cume_dist(), percent_rank(), and ntile(). These functions all take a vector to order by, and return various types of ranks.
 
-* Offsets lead() and lag() allow you to access the previous and next values in a vector, making it easy to compute differences and trends.
+  * Offsets lead() and lag() allow you to access the previous and next values in a vector, making it easy to compute differences and trends.
 
 The other three families are variations on familiar aggregate functions:
 
-* Cumulative aggregates: cumsum(), cummin(), cummax() (from base R), and cumall(), cumany(), and cummean() (from dplyr).
+  * Cumulative aggregates: cumsum(), cummin(), cummax() (from base R), and cumall(), cumany(), and cummean() (from dplyr).
 
-* Rolling aggregates operate in a fixed width window. You won't find them in base R or in dplyr, but there are many implementations in other packages, such as RcppRoll.
+  * Rolling aggregates operate in a fixed width window. You won't find them in base R or in dplyr, but there are many implementations in other packages, such as RcppRoll.
 
-* Recycled aggregates, where an aggregate is repeated to match the length of the input. These are not needed in R because vector recycling automatically recycles aggregates where needed. They are important in SQL, because the presence of an aggregation function usually tells the database to return only one row per group.
+  * Recycled aggregates, where an aggregate is repeated to match the length of the input. These are not needed in R because vector recycling automatically recycles aggregates where needed. They are important in SQL, because the presence of an aggregation function usually tells the database to return only one row per group.
 
 ### 5.7.1 Exercises
 Refer back to the lists of useful mutate and filtering functions. Describe how each operation changes when you combine it with grouping.
 
 With grouping, all these function work separately on each group.
 The functions are:
-* Arithmetic operators:         + - * / ^
-* Modular arithmetic operators: %/% %%
-* Logs:                         log log2 log10
-* Offsets:                      lead lag
-* Cummulative:                  cumsum cumprod cummin cummax cummean
-* Ranking:                      min_rank row_number dense_rank
+  * Arithmetic operators:         + - * / ^
+  * Modular arithmetic operators: %/% %%
+  * Logs:                         log log2 log10
+  * Offsets:                      lead lag
+  * Cummulative:                  cumsum cumprod cummin cummax cummean
+  * Ranking:                      min_rank row_number dense_rank
                                 percent_rank cume_dist ntile
 
 Which plane (tailnum) has the worst on-time record?
 
 Should we use:
-* mean(arr_delay) or
-* max(arr_delay)?
+  * mean(arr_delay) or
+  * max(arr_delay)?
 
 Since we're looking for worst, maybe max(arr_delay).
 This still means that this plane may be fine with other flights,
