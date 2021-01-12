@@ -709,13 +709,13 @@ carrier_and_dest_avg_delay %>%
   ggplot(aes(x = num_incoming_flights, 
              y = avg_delay,
              color = carrier)) +
-  geom_point()
+  geom_point(na.rm = TRUE)
 
 carrier_and_dest_avg_delay %>%
   ggplot(aes(x = num_incoming_flights, 
              y = avg_delay,
              color = dest)) +
-  geom_point()
+  geom_point(na.rm = TRUE)
 ```
 Looks like average delay is very good for most carriers.
 Even where there are a lot of flights coming into a destination,
@@ -916,18 +916,19 @@ and the arrival time value is low - giving a negative speed.
 
 ```{r}
 calc_speed <- function(arr_time, dep_time, distance) {
-  reversed_time = FALSE
-  if (dep_time > arr_time) {
-    reversed_time = TRUE
-  }
-  
+  reversed_time = if_else(dep_time > arr_time,
+          TRUE,  # set if_else evaluation to TRUE if arg1 = TRUE
+          FALSE) # set if_else evaluation to FALSE if arg1 = FALSE
+
   arr_time = time_to_minutes(arr_time)
   dep_time = time_to_minutes(dep_time)
   
-  if (reversed_time == TRUE) {
-    arr_time = arr_time + dep_time
-    dep_time = 0
-  }
+  arr_time = if_else(reversed_time == TRUE,
+                     arr_time + dep_time,
+                     arr_time)
+  dep_time = if_else(reversed_time == TRUE,
+                     0,
+                     dep_time)
   
   distance / (arr_time - dep_time) * 60
 }
@@ -945,10 +946,7 @@ calc_speed <- function(arr_time, dep_time, distance) {
   filter(speed < 0))
 ```
 
-There are still many cases where the speed is negative. This is
-probably because they're in a different time zone. Since there is no
-variable in flights to change the dep_time or arr_time to the same
-time zone, we cannot do anything about this.
+There are no cases where the speed is negative, due to the fix.
 
 Find all destinations that are flown by at least two carriers. Use that information to rank the carriers.
 
