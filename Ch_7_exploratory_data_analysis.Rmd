@@ -55,3 +55,220 @@ ggplot(data = diamonds, mapping = aes(x = carat, color = cut)) +
   * Which values are the most common? Why?
   * Which values are rare? Why? Does that match your expectations?
   * Can you see any unusual patterns? What might explain them?
+Let's see an example that answers some of these questions:
+
+#### Example
+```{r}
+smaller <- diamonds %>%
+  filter(carat < 3)
+
+smaller %>%
+  ggplot(aes(x = carat)) +
+  geom_histogram(binwidth = 0.01)
+```
+
+Some of the questions from this plot could be:
+  * Why are there more diamonds at whole carats and common fractions of carats?
+    - More people buy diamonds at whole carat points or fractions of
+    carat points. Instead of telling your wife, I bought a 0.3875 carat
+    diamond, it will help to say I bought a 1/3 carat diamond. The price
+    will be lower for the 1/3 carat, but it's also easier to remember.
+  * Why are there more diamonds slightly to the right of each peak than there are slightly to the left of each peak?
+    - Everyone wants a diamond at or slightly above the whole carat level,
+    so they can say the carat level of the diamond. If the diamond is
+    smaller, it may be cut to create two smaller diamonds.
+  * Why are there no diamonds bigger than 3 carats?
+    - This may be just natural. More smaller carat diamonds occur in
+    nature than larger carat diamonds. Not sure if this is physics
+    related? Something to check. It's always good to get to the
+    first principles.
+
+Clusters of similar values suggest that subgroups exist in your data. To understand the subgroups, ask:
+
+  * How are the observations within each cluster similar to each other?
+    - Similar because each cluster has the same shape. There are many
+    more diamonds at whole carat levels, then their number drops of
+    until there is a small surge at the fractional carat level, and
+    then it drops off until the next whole carat level.
+  * How are the observations in separate clusters different from each other?
+    - You notice that as the whole carat value increases, the number of
+    diamonds decreases. The whole group has a similar shape but the
+    shape is smaller
+  * How can you explain or describe the clusters?
+    - There are many more diamonds at whole carat levels,
+    then their number drops of until there is a small surge
+    at the fractional carat level, and then it drops off until
+    the next whole carat level.
+  * Why might the appearance of clusters be misleading?
+    - You have to make sure this is not a result of the binwidth
+    parameter. That is why, you should try different binwidths to
+    see if the same patterns occur.
+    
+### Unusual values
+Outliers are observations that are unusual; data points that don’t seem to
+fit the pattern. Outliers could occur:
+  * due to data entry errors
+  * are really valid data that occurs less often
+
+The evidence of outliers in a histogram is the wide limits on the x-axis:
+```{r}
+ggplot(data = diamonds, 
+       mapping = aes(x = y)) +  # y is the width of the diamond
+  geom_histogram(binwidth = 0.5)
+
+ggplot(data = diamonds, 
+       mapping = aes(x = y)) +  # y is the width of the diamond
+  geom_histogram(binwidth = 0.5) +
+  coord_cartesian(ylim = c(0, 50)) # ylim selects the y-axis range
+# You can also select the x-axis range using xlim.
+# ggplot2's xlim, ylim throw away data beyond the limits.
+```
+Now we can extract those outliers using dplyr:
+```{r}
+(unusual <- diamonds %>%
+  filter(y < 3 | y > 20) %>%
+  select(price, x, y, z) %>%
+  arrange(y))
+```
+The y width is measured in mm. Since it cannot be 0, these values
+are incorrect. The other 32mm and 59mm diamonds are more than an
+inch long, yet their price is not exorbitant. They must have
+incorrect values as well.
+
+If your analysis with and without outliers is the same,
+you should remove those outliers and disclose it in your writeup.
+If not, you must justify where those outlier values came from.
+
+### 7.3.4 Exercises
+
+1. Explore the distribution of each of the x, y, and z variables in diamonds. What do you learn? Think about a diamond and how you might decide which dimension is the length, width, and depth.
+```{r}
+hist <- function(df, v, v_label, binwidth, y_lim_min = NULL, y_lim_max = NULL) {
+  tmp_plot <- ggplot(data = df, mapping = aes(x = v)) +
+      geom_histogram(binwidth = binwidth) +
+      labs(x = v_label)
+
+  if(!is.null(y_lim_min) & !is.null(y_lim_max)) {
+    tmp_plot <- tmp_plot +
+      coord_cartesian(ylim = c(y_lim_min, y_lim_max))
+  }
+  
+  (tmp_plot)
+}
+
+hist(diamonds, diamonds$x, 'x', 0.5)
+hist(diamonds, diamonds$y, 'y', 0.5)
+hist(diamonds, diamonds$z, 'z', 0.5)
+```
+Looks like x has outliers below 3.5 and above 10,
+y has outliers below 3 and above 20,
+z has outliers below 2 and above 10.
+```{r}
+hist(diamonds, diamonds$x, 'x', 0.5, 0, 50)
+hist(diamonds, diamonds$y, 'y', 0.5, 0, 50)
+hist(diamonds, diamonds$z, 'z', 0.5, 0, 50)
+```
+We can see the large number of x = 0, z = 0 and z > 30 values.
+We can find the x = 0, and z = 0 values using the same procedure above:
+```{r}
+diamonds %>%
+  filter(x == 0 | y == 0 | z == 0 | z > 30) %>%
+  select(price, x, y, z, clarity, cut)
+```
+The diamonds with the x, y, and z values of 0 are errors.
+
+The z 31.8 diamond is priced at 1970 for a 5mm x 5mm diamond with a height
+of almost 32mm (25.4mm = 1 inch). It's cut is very good, and clarity is
+middle-level. Is the price of $1970 small for such a diamond? Let's look at other 5mm x 5mm diamonds to compare:
+```{r}
+diamonds %>%
+  filter(x > 4.9 & x < 5.1 & y > 4.9 & y < 5.1 & clarity == 'VS1' & cut == 'Very Good') %>%
+  select(price, x, y) %>%
+  ggplot(aes(x = price)) +
+  geom_histogram()
+```
+
+So a diamond with the $1970 price and a z of 31.8 is valid (since there
+are other diamonds without the large z value but the same price).
+
+2. Explore the distribution of price. Do you discover anything unusual or surprising? (Hint: Carefully think about the binwidth and make sure you try a wide range of values.)
+```{r}
+hist(diamonds, diamonds$price, 'price', 50)
+hist(diamonds, diamonds$price, 'price', 100)
+hist(diamonds, diamonds$price, 'price', 150)
+hist(diamonds, diamonds$price, 'price', 250)
+hist(diamonds, diamonds$price, 'price', 500)
+hist(diamonds, diamonds$price, 'price', 750)
+hist(diamonds, diamonds$price, 'price', 1000)
+hist(diamonds, diamonds$price, 'price', 1250)
+hist(diamonds, diamonds$price, 'price', 1500)
+hist(diamonds, diamonds$price, 'price', 1750)
+hist(diamonds, diamonds$price, 'price', 2000)
+```
+There are no diamonds under $500. There is a steep rise from
+$500 through around $800. Most of the diamonds are around $800.
+Then there is a steep fall until around $4000. There is a small
+bump (which means more diamonds are available) around $4500.
+This is visible even if we raise the binwidth for the histogram
+from 50 through 500.
+If this is due to market forces, maybe there are two sets of
+people (one set can afford diamonds < $1000, and another can afford
+diamonds < $5000)?
+
+3. How many diamonds are 0.99 carat? How many are 1 carat? What do you think is the cause of the difference?
+```{r}
+diamonds %>%
+  filter(carat == 0.99 | carat == 1.0) %>%
+  summarise(
+    almost_a_carat = sum(carat == 0.99),
+    full_one_carat = sum(carat == 1.0)
+  )
+```
+The reason is nobody wants to say they have a diamond that is
+almost a carat. Instead they want to say they have a diamond
+that is 1 carat. If there are many diamonds that are almost a carat,
+they may be sold for industrial purposes. There are now only
+23 unsold "almost-a-carat" diamonds.
+
+4. Compare and contrast coord_cartesian() vs xlim() or ylim() when zooming in on a histogram. What happens if you leave binwidth unset? What happens if you try and zoom so only half a bar shows?
+
+According to the help system on coord_cartesian:
+  * setting xlim, ylim on coord_cartesian will zoom the plot
+  * setting xlim(), ylim() on the scales will discard data
+    that is not within those limits before drawing the plot
+Let's see this in action:
+```{r}
+diamonds %>%
+  ggplot(aes(x = price)) +
+  geom_histogram(binwidth = 250) +
+  coord_cartesian(xlim = c(3500, 5500))
+```
+You can see how the height of the plot above is large. This is because
+we're just zoomed into a price range where the counts are low.
+The rest of the plot with high counts is still there - it's just not seen.
+
+```{r}
+hist(diamonds, diamonds$price, 'price', 500)
+diamonds %>%
+  ggplot(aes(x = price)) +
+  geom_histogram(binwidth = 250, na.rm = TRUE) +
+  xlim(c(3500, 5500))
+```
+The warnings show us that values were removed.
+
+If you leave binwidth unset for a histogram, you get a default of 30
+bins and a warning asking you to look into the correct bin width.
+```{r}
+diamonds %>%
+  ggplot(aes(x = price)) +
+  geom_histogram(binwidth = 250, na.rm = TRUE) +
+  xlim(c(5001, 5500))
+
+diamonds %>%
+  ggplot(aes(x = price)) +
+  geom_histogram(binwidth = 250, na.rm = TRUE) +
+  xlim(c(5200, 5500))
+```
+This shows that when you try to zoom to a width less than the bar width,
+you will not get even half a bar on the screen.
+
