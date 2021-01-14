@@ -270,5 +270,204 @@ diamonds %>%
   xlim(c(5200, 5500))
 ```
 This shows that when you try to zoom to a width less than the bar width,
-you will not get even half a bar on the screen.
+you will not get even half a bar on the screen
 
+## Missing values
+1. Either drop the entire row that has any missing values:
+```{r}
+diamonds %>%
+  filter(between(y, 3, 20))
+```
+This option is not reccommended because:
+  * even if one variable value is invalid, other column values
+    may be valid
+  * If your dataset has lots of missing values, you won't have
+    many rows left after this approach
+2. Replace the unusual values with different values
+```{r}
+diamonds %>%
+  mutate(y = ifelse(y < 3 | y > 20, NA, y))
+```
+3. If you want to compare cases with missing values against cases
+with values:
+```{r}
+nycflights13::flights %>%
+  mutate(
+    cancelled = is.na(dep_time),  # TRUE/FALSE based on dep_time
+    sched_hour = sched_dep_time %/% 100, # sched_dep_time has no NAs
+    sched_min = sched_dep_time %% 100,
+    sched_dep_time = sched_hour + sched_min / 60 # new sched_dep_time
+  ) %>%
+  ggplot(mapping = aes(sched_dep_time)) +  # we're plotting sched_dep_time
+  geom_freqpoly(mapping = aes(color = cancelled), # cancelled or not
+                binwidth = 1/4)
+```
+This plot isn't great, since there are many more noncancelled flights
+compared to cancelled flights.
+### case_when
+Alternatively, you can use case_when(). It
+  * allows you to vectorize multiple if_else() statements
+  * example:
+```{r}
+x <- 1:50
+case_when(
+  x %% 35 == 0 ~ "fizz_buzz",
+  x %% 7 == 0 ~ "fizz",
+  x %% 5 == 0 ~ "buzz",
+  TRUE ~ as.character(x)
+)
+```
+Like an if statement, the arguments are evaluated in order, and
+they proceed from the most specific to the most general.
+If none of the cases match, result is NA.
+The RHS must be of the same type for each case.
+The sequence of operation of case_when is:
+  * evaluate all RHS values for the given input. This is done even if
+    the LHS does not match the value for this case. This may cause
+    NAs to be produced within the calculations, even though there are no
+    NAs seen in the output.
+  * evaluate the LHS values
+  * construct the result by mapping the correct RHS to the LHS values.
+Another example:
+```{r}
+(y <- seq(-2, 2, by = 0.5))
+case_when(
+  y >= 0 ~ sqrt(y),
+  TRUE ~ y
+)
+```
+Another example:
+```{r}
+starwars %>%
+  select(name:mass, gender, species) %>%
+  mutate(
+    type = case_when(
+      height > 200 | mass > 200 ~ "large", # can have complex LHS
+      species == "Droid" ~ "robot",
+      TRUE ~ "other"
+    )
+  ) %>%
+  select(name, type)
+```
+
+R and ggplot2 subscribe to "missing values should never silently go 
+missing." You always get a warning. Use na.rm = TRUE to remove 
+missing values so you don't get the warning.
+
+### 7.4.1 Exercises
+
+1. What happens to missing values in a histogram? What happens to missing values in a bar chart? Why is there a difference?
+
+Missing values in a histogram are removed before plotting.
+A warning shows how many values were removed by ggplot.
+
+Let's see how missing values are handled in a bar chart:
+```{r}
+nycflights13::flights %>%
+  select(carrier) %>%
+  ggplot() +
+  geom_bar(mapping = aes(carrier))
+```
+There are no messages about missing values when summing counts for a bar
+chart. Missing values are silently thrown away.
+Why is there a difference? I have not found an answer for that yet.
+
+2. What does na.rm = TRUE do in mean() and sum()?
+If na.rm is TRUE, functions like mean and sum remove NA values from
+the data before starting their computations.
+
+## Covariation
+Variation shows how the data within a variable varies.
+Covariation shows if the data in two or more variables varies together
+in a similar way (either +ve covariation or -ve covariation).
+
+Very often we want to see the distribution of a numerical variable against
+multiple values of a categorical variable.
+geom_freqpoly is not a very good way to see this.
+If one group has lower counts than the rest, we can't see it very well since the scaling is done by the higher values.
+
+```{r}
+ggplot(data = diamonds, mapping = aes(x = price)) +
+  geom_freqpoly(mapping = aes(color = cut), binwidth = 500)
+```
+Instead, we plot the density i.e. we standardise the plot such that
+the area under each polygon is 1.
+```{r}
+ggplot(data = diamonds, mapping = aes(x = price, y = ..density..)) +
+  geom_freqpoly(mapping = aes(color = cut), binwidth = 500)
+```
+It seems like fair diamonds (lowest quality) have the highest average 
+price. Maybe we're not interpreting this right.
+
+Let's see this in a boxplot:
+```{r}
+ggplot(data = diamonds, mapping = aes(x = cut, y = price)) +
+  geom_boxplot()
+```
+It supports the counter-intuitive argument that better quality diamonds
+are cheaper (on average).
+
+cut is an ordered factor (Good is better than Fair, etc.).
+If you have to re-order the categorical variable, use reorder().
+reorder(categorical, numerical, function) applies the function on the
+numerical values to reorder the categorical variable.
+```{r}
+ggplot(data = mpg, 
+       mapping = aes(x = reorder(class, hwy, FUN = median), 
+                     y = hwy)) +
+  geom_boxplot() +
+  coord_flip()  # flip the graph 90 degrees. This helps with long names.
+```
+
+### 7.5.11 Exercises
+
+1. Use what you’ve learned to improve the visualisation of the departure times of cancelled vs. non-cancelled flights.
+```{r}
+nycflights13::flights %>%
+  mutate(
+    cancelled = is.na(dep_time),
+    sched_hour = sched_dep_time %/% 100,
+    sched_min = sched_dep_time %% 100,
+    sched_dep_time = sched_hour + sched_min / 60
+  ) %>%
+  ggplot(mapping = aes(x = sched_dep_time, y = ..density..)) +
+  geom_freqpoly(mapping = aes(color = cancelled), binwidth = 1)
+```
+
+The fraction of cancelled flights increases from 5am through 8pm.
+Then it decreases. The fraction of non-cancelled flights increases
+from 5am through 8am, goes down a little, and starts going up
+again around 2pm through 8pm. It decreases after that.
+The main point this plot shows is there are two humps - one around
+8pm and one around 3pm for fraction of flights.
+Cancelled flights increase rapidly from 5am, stay steady until 2pm,
+then increase rapidly and stay high until 8pm.
+Since more flights means more people travel at that time,
+we can see that most people want to travel from 5am through 2pm
+(presumably so they can have meetings till the end of the day),
+and from 2pm through 8pm (coming back home).
+```{r}
+flights <- nycflights13::flights %>%
+  mutate(
+    cancelled = is.na(dep_time),
+    sched_hour = sched_dep_time %/% 100,
+    sched_min = sched_dep_time %% 100,
+    sched_dep_time = as.factor(round(sched_hour + sched_min / 60, 0))
+  ) %>%
+  subset(select = -c(sched_hour, sched_min))
+
+flights %>%
+  ggplot() +
+  geom_bar(mapping = aes(x = sched_dep_time,
+                             fill = cancelled), 
+           position = 'dodge')
+```
+The number of cancelled flights is constant until 3pm at which time
+it jumps up and stays high until after 8pm.
+You can also see the two humps for non-cancelled flights around 8am
+and 4pm.
+
+2. What variable in the diamonds dataset is most important for predicting the price of a diamond? How is that variable correlated with cut? Why does the combination of those two relationships lead to lower quality diamonds being more expensive?
+
+
+    
