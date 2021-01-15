@@ -709,3 +709,127 @@ on the legend.
 Our displays are wider than taller. So using the x scale for a
 categorical variable with more categories makes sense. The y scale
 is given to the less caregories variable.
+
+7.5.3 Two continuous variables
+
+For the diamonds dataset, a carat vs price plot can have overplotted
+points. We use alpha to control it, but this may not be enough for
+really large datasets.
+
+geom_bin2d and geom_hex create a grid from two continuous variables,
+and plot the number of points at each intersection as a color.
+geom_bin2d plots squares, geom_hex plots hexagons.
+Install the hexbin package for geom_hex.
+
+```{r}
+ggplot(data = smaller) +
+  geom_bin2d(mapping = aes(x = carat, y = price))
+```
+```{r}
+ggplot(data = smaller) +
+  geom_hex(mapping = aes(x = carat, y = price))
+```
+Another idea is to bin one variable and use boxplot, barplot to plot
+the binned variable on the x axis and the continuous variable on the y.
+```{r}
+ggplot(data = smaller, mapping = aes(x = carat, y = price)) +
+  geom_boxplot(mapping = aes(group = cut_width(carat, 0.1)))
+```
+cut_width divides the variable into bins of width sizes.
+
+In normal boxplots, you cannot see the variation in the number of points
+in each bin. To see that, use varwidth = TRUE. This will change the width
+of the bar proportional to the number of points in the bin.
+
+```{r}
+ggplot(data = smaller, mapping = aes(x = carat, y = price)) +
+  geom_boxplot(mapping = aes(group = cut_width(carat, 0.1)),
+               varwidth = TRUE)
+```
+This may cause you not to see some box widths.
+
+You can also use cut_number instead of cut_width. This displays the same
+number of points in each bin.
+```{r}
+ggplot(data = smaller, mapping = aes(x = carat, y = price)) +
+  geom_boxplot(mapping = aes(group = cut_number(carat, 20)))
+```
+### 7.5.3.1 Exercises
+
+1. Instead of summarising the conditional distribution with a boxplot, you could use a frequency polygon. What do you need to consider when using cut_width() vs cut_number()? How does that impact a visualisation of the 2d distribution of carat and price?
+
+When using cut_width, you need to consider the range. You can take the
+full range and divide it into the number of polygons you want, and
+make that your width.
+
+When using cut_number, it is the number of polygons you want.
+
+In either case, too many polygons will not be easy to see.
+
+```{r}
+ggplot(data = smaller, mapping = aes(x = price)) +
+  geom_freqpoly(mapping = aes(color = cut_width(carat, 0.5)),
+                binwidth = 500) # binwidth for the price
+```
+```{r}
+ggplot(data = smaller, mapping = aes(x = price)) +
+  geom_freqpoly(mapping = aes(color = cut_number(carat, 5)),
+                binwidth = 500)
+```
+
+2. Visualise the distribution of carat, partitioned by price.
+```{r}
+ggplot(smaller, aes(price, carat)) +
+  geom_boxplot(aes(group = cut_width(price, 500)),
+               varwidth = TRUE)
+```
+```{r}
+ggplot(smaller, aes(price, carat)) +
+  geom_boxplot(aes(group = cut_number(price, 20)))
+```
+In this plot, the width of the box is proportional to the number of
+diamonds present at those price points and carats.
+
+3. How does the price distribution of very large diamonds compare to small diamonds? Is it as you expect, or does it surprise you?
+
+The price distribution of very large diamonds is much wider than that of
+the very small diamonds. I'm not surprised since the very small diamonds
+are used in industrial machinery, so market forces determine their price.
+This means competition causes prices to be within a small range.
+For large diamonds, individuals determine the price. Mainly individuals
+with a lot of free cash to spend. So impulse buying, or buying to
+impress a lady will create a large range in the price.
+
+4. Combine two of the techniques you’ve learned to visualise the combined distribution of cut, carat, and price.
+
+```{r}
+diamonds %>%
+  mutate(price_bin = cut_number(price, 10)) %>%
+  ggplot(aes(price_bin, carat)) +
+  geom_boxplot(aes(fill = cut),
+               position = position_dodge(0.9)) +
+  scale_fill_manual(values = c("#999999", "#E69F00",
+                               "#990000", "#009900", "#000099")) +
+  coord_flip()
+```
+I'm not sure how to rename the price_bin text labels. Maybe we can
+use the average value of each bin's left and right boundary values.
+If we could, we can plot the graph without coord_flip, which will
+give more space to the boxes in it.
+
+5. Two dimensional plots reveal outliers that are not visible in one dimensional plots. For example, some points in the plot below have an unusual combination of x and y values, which makes the points outliers even though their x and y values appear normal when examined separately.
+Why is a scatterplot a better display than a binned plot for this case?
+```{r}
+ggplot(data = diamonds) +
+  geom_point(mapping = aes(x = x, y = y)) +
+  coord_cartesian(xlim = c(4, 11), ylim = c(4, 11))
+```
+```{r}
+ggplot(data = diamonds) +
+  geom_boxplot(aes(x = cut_number(x, 20), y = y)) +
+  coord_cartesian(xlim = c(4, 11), ylim = c(4, 11))
+```
+As you can see, in the boxplot (which is a binned plot), the points
+show up close to the IQR box. It is not easy to distinguish which of
+them are outliers. In the 2-d scatterplot, the extra second dimension
+allows more space to see the outlier as it really is - an outlier.
