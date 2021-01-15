@@ -8,6 +8,10 @@ output: html_document
 Hadley Wickham's [R for data science](https://r4ds.had.co.nz/exploratory-data-analysis.html), Chapter 7 problems and notes
 ```{r Load libraries}
 library(tidyverse)
+library(ggstance)
+library(lvplot)
+library(ggbeeswarm)
+# library(seriation)
 ```
 
 Since this is a large dataset, only a few rows are printed when you type
@@ -469,5 +473,239 @@ and 4pm.
 
 2. What variable in the diamonds dataset is most important for predicting the price of a diamond? How is that variable correlated with cut? Why does the combination of those two relationships lead to lower quality diamonds being more expensive?
 
+```{r}
+pairs(diamonds)
+```
+Looking at the price row in the above plot, the line goes up for carat,
+x, y, and z. Let's plot these separately against price to see what is
+the best correlation. Also note that the pairs function converts
+categorical data to numerical data automatically without knowing
+for ex. which cut is better than the other. We have to reorder each
+categorical plots with the right sequence to see if any categorical
+variables have better correlation with the price. Let's do the 
+carat, and x, y, z first, and let's plot them on the same xlim.
+```{r}
+plot_numeric_corr <- function(data, var_x, name_x, var_y, name_y) {
+  data %>%
+    ggplot(mapping = aes(x = var_x, y = var_y)) +
+    geom_point(alpha = 1/10) +
+    xlab(name_x) +
+    ylab(name_y) +
+    coord_cartesian(xlim = c(0, 10))
+}
 
-    
+plot_numeric_corr(diamonds, 
+                  diamonds$carat, 'carat', 
+                  diamonds$price, 'price')
+plot_numeric_corr(diamonds, 
+                  diamonds$x, 'x', 
+                  diamonds$price, 'price')
+plot_numeric_corr(diamonds, 
+                  diamonds$y, 'y', 
+                  diamonds$price, 'price')
+plot_numeric_corr(diamonds, 
+                  diamonds$z, 'z', 
+                  diamonds$price, 'price')
+```
+Looking at the x-axis range, we can see that for x and y the range
+over which most of the points go up are larger than the range for z
+and carats. In fact, the range for carat is the smallest, so it is
+the most important in determining the price.
+
+We have worked with cut earlier, and found it is not very important
+to price. We have not looked at color and clarity, which we will
+do now:
+```{r}
+diamonds %>%
+  ggplot(mapping = aes(x = color, y = price)) +
+  geom_boxplot()
+```
+We see that the prices go up with color. The worst color is D, and
+the best is J. They do not go up as fast as with carat, though.
+```{r}
+diamonds %>%
+  ggplot(mapping = aes(x = clarity, y = price)) +
+  geom_boxplot()
+```
+Here, the price goes lower as the clarity increases, which is strange.
+Maybe the diamonds found with lower clarity are of a higher carat,
+thus their price is high.
+
+Let's see how carat and cut are correlated:
+```{r}
+ggplot(data = diamonds, mapping = aes(x = cut, y = carat)) +
+  geom_boxplot()
+```
+
+The highest correlation of the price is against the carat.
+Even though the cut is just Fair, diamonds found with this cut are
+of a higher carat. This causes those diamonds to be values higher.
+The diamonds of an Ideal cut are of a smaller carat, thus their
+prices are lower.
+
+3. Install the ggstance package, and create a horizontal boxplot. How does this compare to using coord_flip()?
+
+```{r}
+diamonds %>%
+  ggplot(mapping = aes(price, cut)) +
+  geom_boxploth()
+```
+```{r}
+diamonds %>%
+  ggplot(mapping = aes(x = cut, y = price)) +
+  geom_boxplot() +
+  coord_flip()
+```
+The output of both ggstance::geom_boxploth and ggplot2::geom_boxplot + 
+coord_flip are the same. When creating with ggstance, we give the
+x and y values as in the final plot. With ggplot2, we give the x and y
+values as in the vertical plot, and let coord_flip flip them around.
+
+3. One problem with boxplots is that they were developed in an era of much smaller datasets and tend to display a prohibitively large number of “outlying values”. One approach to remedy this problem is the letter value plot. Install the lvplot package, and try using geom_lv() to display the distribution of price vs cut. What do you learn? How do you interpret the plots?
+
+The lvplot was created because there could be many "outliers" beyond
+the edges of the box in a boxplot. For a boxplot, outside the
+IQR it was not possible to interpret how far off the points were.
+
+Now, with the lvplot, you can give a k value. By default k = 3, and
+you get the thicker boxplot type box with the median line and the IQR,
+but you also get another thinner inner box. The inner box shows how long
+the octiles are. This way you can interpret more of the data.
+
+```{r}
+p <- ggplot(data = diamonds, mapping = aes(cut, price))
+p + geom_lv()
+p + geom_lv(aes(fill = ..LV..))
+```
+
+5. Compare and contrast geom_violin() with a facetted geom_histogram(), or a coloured geom_freqpoly(). What are the pros and cons of each method?
+
+geom_violin is a mirrored density plot (a combination of boxplot and
+density). It shows you the distribution of each grouped categorical
+value against a numerical value.
+
+geom_histogram shows you a binned numerical variable against a count
+of the instances in that bin.
+
+geom_freqpoly shows you a polygon for each category of a categorical
+variable against the count in that bin.
+If you use ..density.. on the y axis, it will show you the density
+of the distribution. This means the area under each polygon is 1.
+
+```{r}
+p <- ggplot(data = diamonds, mapping = aes(cut, price))
+p + geom_violin()
+```
+
+6. If you have a small dataset, it’s sometimes useful to use geom_jitter() to see the relationship between a continuous and categorical variable. The ggbeeswarm package provides a number of methods similar to geom_jitter(). List them and briefly describe what each one does.
+
+ggbeeswarm extends ggplot2 with violin/beeswarm plots.
+This package allows plotting of several groups of one dimensional data
+as a violin point/beeswarm plot by arranging data points to resemble
+the underlying distribution.
+
+You can use geom_quasirandom function to show the violin/beeswarm plots.
+geom_quasirandom offsets the points to decrease overplotting.
+
+geom_beeswarm creates offsets based on the number of data points at
+that level.
+
+```{r}
+diamonds %>%
+  ggplot(aes(cut, price)) +
+  geom_quasirandom(alpha = 1/10)
+```
+Just by looking at the transparency of the Fair violin, we can see that
+there are fewer points with a Fair cut.
+```{r}
+diamonds %>%
+  group_by(cut) %>%
+  summarise(
+    num_values = n()
+  )
+```
+For some reason, with the 50,000 points in the diamonds dataset,
+the beeswarm plot takes more than a minute to plot. I stopped it.
+geom_violin finishes with 1 second.
+```{r}
+ggplot(data = diamonds, mapping = aes(x = cut, y = price)) +
+  geom_violin()
+```
+
+## Two categorical variables
+To visualize covariation between two categorical variables:
+  * If the categorical variables are ordered:
+    - use geom_count. It will display the count as a smaller or bigger
+      shape at the intersection of each of the values of the two
+      variables
+    - use count function with dplyr on the two variables,
+      then plot and use geom_time(mapping = aes(fill = n))
+  * If the categorical variables are unordered:
+    - use seriation package to reorder the rows/columns and plot
+      them simultaneously
+    - for larger plots, try d3heatmap or heatmaply packages, which
+      create interactive plots
+```{r}
+ggplot(data = diamonds) +
+  geom_count(mapping = aes(x = cut, y = color))
+```
+If the count function takes as input the cut and color of diamonds,
+the result is a table with cut as rows, and color and the 
+number of points in that cut+color category as n.
+```{r}
+diamonds %>%
+  count(cut, color)
+```
+
+```{r}
+diamonds %>%
+  count(cut, color) %>%
+  ggplot(mapping = aes(cut, color)) +
+  geom_tile(mapping = aes(fill = n))
+```
+
+1. How could you rescale the count dataset above to more clearly show the distribution of cut within colour, or colour within cut?
+
+Since the counts are in the low hundreds for Fair cut, and in the
+thousands for most of the other cuts, we can use a log base 2 scale
+on the count:
+```{r}
+diamonds %>%
+  count(cut, color) %>%
+  mutate(log2n = log(n)) %>%
+  ggplot(aes(cut, color)) +
+  geom_tile(aes(fill = log2n))
+```
+
+2. Use geom_tile() together with dplyr to explore how average flight delays vary by destination and month of year. What makes the plot difficult to read? How could you improve it?
+```{r}
+flights %>%
+  group_by(dest, month) %>%
+  mutate(avg_arr_delay = mean(arr_delay)) %>%
+  ggplot(aes(dest, month)) +
+  geom_tile(aes(fill = avg_arr_delay)) +
+  coord_flip()
+```
+There are too many destinations. If we bin them by distance, we will
+get some better plot. Still, if the destination is in the northwest,
+it has more of a chance of delays due to snow. There are lat/long/altitude
+values for each destination in the airports dataset, and we could use
+those to decide if the destination is northeast, south, etc., but we don't know how to join datasets yet, so let's just do it by distance and see
+what we get.
+```{r}
+flights %>%
+  mutate(log2_distance = round(log2(distance))) %>%
+  group_by(log2_distance, month) %>%
+  mutate(avg_arr_delay = mean(arr_delay)) %>%
+  ggplot(aes(x = log2_distance, y = dest)) +
+  geom_tile(aes(fill = avg_arr_delay))
+```
+Still, the destinations are not readable at all. Also, we cannot
+see much difference in the gray scale values to see where it is
+on the legend.
+
+3. Why is it slightly better to use aes(x = color, y = cut) rather than aes(x = cut, y = color) in the example above?
+
+Our displays are wider than taller. So using the x scale for a
+categorical variable with more categories makes sense. The y scale
+is given to the less caregories variable.
