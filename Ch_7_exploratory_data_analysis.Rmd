@@ -11,6 +11,7 @@ library(tidyverse)
 library(ggstance)
 library(lvplot)
 library(ggbeeswarm)
+library(modelr)
 # library(seriation)
 ```
 
@@ -833,3 +834,47 @@ As you can see, in the boxplot (which is a binned plot), the points
 show up close to the IQR box. It is not easy to distinguish which of
 them are outliers. In the 2-d scatterplot, the extra second dimension
 allows more space to see the outlier as it really is - an outlier.
+
+## Patterns and models
+
+When you spot a pattern, ask yourself:
+  * could the relationship be a coincidence?
+  * how can you describe the relationship?
+  * what is the strength of the relationship?
+  * what other variables might affect the relationship?
+  * could the relationship be different for subgroups of the data?
+  
+If you think of variation in a variable decreasing certainity,
+covariation in a relationship among variables increases certainity.
+Patterns provide a very useful tool for data scientists since they
+reveal this covariation.
+  * if variables covary, you can use one variable to make predictions
+    on the other
+  * if two variables have a causal relationship, you can use the value of
+    one variable to control the value of the second
+    
+Models are a tool to extract patterns out of data. In the diamonds dataset
+price, carat, and cut are related. We can remove the very strong
+relationship between price and carat by fitting a model to them.
+When we compute the residuals, they will tell us how the price changes
+with the other variables:
+
+```{r}
+mod <- lm(log(price) ~ log(carat), data = diamonds)
+
+diamonds2 <- diamonds %>%
+  add_residuals(mod) %>% # add a column 'resid' to the diamonds dataset
+  mutate(resid = exp(resid))
+
+diamonds2 %>%
+  ggplot(aes(carat, resid)) +
+  geom_point()
+```
+These are the residual values after applying the carat vs. price model.
+We can now look at the relationship between cut and the residuals.
+```{r}
+diamonds2 %>%
+  ggplot(mapping = aes(x = cut, y = resid)) +
+  geom_boxplot()
+```
+
