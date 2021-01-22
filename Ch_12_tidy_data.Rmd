@@ -224,8 +224,8 @@ is a zero-length vector (in this case double()).
 
 2. Why does this code fail?
 ```{r}
-table4a %>% 
-  pivot_longer(c(1999, 2000), names_to = "year", values_to = "cases")
+# table4a %>% 
+#   pivot_longer(c(1999, 2000), names_to = "year", values_to = "cases")
 ```
 It fails because column names cannot be invalid R variable
 names unless you use backticks around them. Here 1999, and 2000
@@ -272,4 +272,333 @@ preg %>%
 
 ## 12.4 Separating and uniting
 
+### 12.4.1 Separate
 
+Separate pulls apart one column into multiple columns,
+splitting wherever a separator character appears.
+
+  * Separator is any non-numeric character.
+  * You can also specify the character with sep = ''.
+    sep is a regex
+  * You can convert into the correct type using convert = TRUE.
+    By default, converted columns remain strings.
+  * The 'extra' argument is to decide how separate will
+    handle values that after separation are more than the
+    number of new columns.
+      + 'warn' (default): warn and drop extra values
+      + 'drop': drop extra values without warning
+      + 'merge': only splits at the leftmost separator
+  * The 'fill' argument controls what separate will do when
+    there are not enough pieces.
+      + 'warn' (default): warn and fill from the right
+      + 'right': fill with missing values on the right
+      + 'left': fill with missing values on the left
+```{r}
+table3
+
+table3 %>%
+  separate(rate, # column to separate
+           into = c('cases', 'population'), # create these cols
+           sep = '/', # by default, non-integer char will
+                      # be used to separate the column.
+           convert = TRUE) # Convert into appropriate types
+```
+
+You can also use separate to separate at fixed-widths.
+Just pass a vector of integers to tell separate where to split.
+The position value is just like an index, starting at 1.
+Negative position values start from end-of-string.
+
+```{r}
+table3 %>%
+  separate(year, into = c('century', 'year'), sep = 2)
+```
+### 12.4.2 Unite
+
+Unite rejoins multiple columns into a single column.
+
+  * unite takes a dataframe, the columns to combine, and the
+    name of the new variable to create.
+  * unite combines using the default separator '_'.
+    Use sep = '' to give it a different separator.
+  
+```{r}
+table5
+
+table5 %>%
+  unite(new, century, year,
+        sep = '')
+```
+
+### 12.4.3 Exercises
+
+1. What do the extra and fill arguments do in separate()? Experiment with the various options for the following two toy datasets.
+
+  * The 'extra' argument is to decide how separate will
+    handle values that after separation are more than the
+    number of new columns.
+      + 'warn' (default): warn and drop extra values
+      + 'drop': drop extra values without warning
+      + 'merge': only splits at the leftmost separator
+  * The 'fill' argument controls what separate will do when
+    there are not enough pieces.
+      + 'warn' (default): warn and fill from the right
+      + 'right': fill with missing values on the right
+      + 'left': fill with missing values on the left
+```{r}
+tibble(x = c("a,b,c", "d,e,f,g", "h,i,j")) %>% 
+  separate(x, c("one", "two", "three"))
+
+tibble(x = c("a,b,c", "d,e,f,g", "h,i,j")) %>% 
+  separate(x, c("one", "two", "three"), extra = 'drop')
+
+tibble(x = c("a,b,c", "d,e,f,g", "h,i,j")) %>% 
+  separate(x, c("one", "two", "three"), extra = 'merge')
+
+
+tibble(x = c("a,b,c", "d,e", "f,g,i")) %>% 
+  separate(x, c("one", "two", "three"))
+
+tibble(x = c("a,b,c", "d,e", "f,g,i")) %>% 
+  separate(x, c("one", "two", "three"), extra = 'drop')
+
+tibble(x = c("a,b,c", "d,e", "f,g,i")) %>% 
+  separate(x, c("one", "two", "three"), extra = 'merge')
+
+```
+
+2. Both unite() and separate() have a remove argument. What does it do? Why would you set it to FALSE?
+
+remove = TRUE is the default. It removes the column referenced
+for the separate/unite operation. You would set it to FALSE if
+you wanted to run another separate/unite operation against
+that column.
+
+3. Compare and contrast separate() and unite(). Why are there three variations of separation (by position, by separator, and with groups), but only one unite?
+
+There are various ways to separate a string, but there are
+only a few ways to unite two or more text strings. To unite:
+
+  * we can use different separators (but the sep argument
+    already allows us to do that within the unite function)
+  * we can put str2 before str1 or str2 after str1 (but we can
+    already do that today in the sequence of the columns
+    we reference)
+    
+## 12.5 Missing values
+
+Values may be missing with a flagged NA value, or without
+any indication
+```{r}
+(stocks <- tibble(
+  year   = c(2015, 2015, 2015, 2015, 2016, 2016, 2016),
+  qtr    = c(   1,    2,    3,    4,    2,    3,    4),
+  return = c(1.88, 0.59, 0.35,   NA, 0.92, 0.17, 2.66)
+))
+```
+The NA value in the above dataset shows one missing value.
+The other is the missing row with year = 2016, qtr = 1.
+We can make implicit missing values explicit like this:
+```{r}
+stocks %>%
+  pivot_wider(names_from = year, values_from = return)
+```
+Going back to the longer dataframe, we can specify
+values_drop_na = TRUE to implicitly drop missing values:
+```{r}
+stocks %>%
+  pivot_wider(names_from = year, values_from = return) %>%
+  pivot_longer(cols = c(`2015`, `2016`),
+               names_to = 'year',
+               values_to = 'return',
+               values_drop_na = TRUE)
+```
+
+Another way to find missing values in dataframe is the
+complete function. It takes columns, and return a dataframe
+that has all combinations of values in those columns.
+The output dataframe is sorted in ascending order of
+those columns.
+```{r}
+stocks %>%
+  complete(year, qtr)
+```
+
+If dataframes are generated using data entry, missing values
+indicate the earlier value should be carried forward:
+```{r}
+(treatment <- tribble(
+  ~ person,           ~ treatment, ~response,
+  "Derrick Whitmore", 1,           7,
+  NA,                 2,           10,
+  NA,                 3,           9,
+  "Katherine Burke",  1,           4
+))
+```
+The fill function can fill those values, by using the value
+in the earlier row.
+```{r}
+treatment %>%
+  fill(person)
+```
+
+### 12.5.1 Exercises
+
+1. Compare and contrast the fill arguments to pivot_wider() and complete().
+
+  * pivot_wider fills missing values with NA.
+  * complete fills missing values in the specified columns
+    with the appropriate integer value. In unspecified columns,
+    the missing values are filled with NA
+  * fill fills missing values in the specified columns
+    with the last row's value. In the unspecified columns,
+    it keeps the value as-is
+    
+2. What does the direction argument to fill() do?
+
+The .direction argument can be:
+  
+  * 'down' (default): fill with earlier row's value
+  * 'up': fill with next row's value
+  * 'updown': when values are missing inconsistently,
+              they're filled with both earlier and next
+              row's values (i think)?
+  * 'downup': when values are missing inconsistently,
+              they're filled with both earlier and next
+              row's values (i think)?
+              
+## 12.6 Case study
+
+The who dataset contains TB cases by year, country, gender, age,
+and diagnosis method.
+```{r}
+who
+```
+This is a messy dataset with:
+
+  * country, iso2, and iso3 all redundantly specifying country
+  * variables like new_sp_m014, new_ep_m014, new_ep_f014
+    are probably values (not variables, based on their names), 
+    so we need to gather them under the 'key' column
+  * the cells represent count of cases, so we will gather them
+    under the 'cases' column
+  * there are a lot of missing values, so we will use
+    values_drop_na = TRUE to focus on the actual values
+    
+```{r}
+(who1 <- who %>%
+   pivot_longer(
+     cols = new_sp_m014:newrel_f65,
+     names_to = 'key',
+     values_to = 'cases',
+     values_drop_na = TRUE
+   ))
+```
+Let's explore the key column by counting the unique key values.
+```{r}
+who1 %>%
+  count(key)
+```
+
+We have a data dictionary that tells us:
+
+  * the first 3 letters denote new/old cases
+  * the next few letters are:
+    + rel for relapse
+    + ep for extrapulmonary TB
+    + sn for pulmonary TB that could not be diagnosed 
+      by pulmonary smear (smear negative)
+    + sp for pulmonary TB that could be diagnosed
+      by a pulmonary smear (smear positive)
+  * the next letter is the sex of the patient (m/f)
+  * the remaining numbers give the age group
+    + 014: 0-14
+    + 1524: 15-24
+    + 2534: 25-34
+    + 3544: 35-44
+    + 4554: 45-54
+    + 5564: 55-64
+    + 65: 65 and older
+  * the names are slightly inconsistent. Instead of new_rel
+    we have newrel. We can fix that with str_replace function.
+```{r}
+(who2 <- who1 %>%
+  mutate(key = stringr::str_replace(key, 'newrel', 'new_rel')))
+```
+Then we separate the codes into new, type, and sexage columns
+```{r}
+(who3 <- who2 %>%
+  separate(key, c('new', 'type', 'sexage'), sep = '_'))
+```
+The new column has the same value in it 'new'. Let's make
+sure this is the case by counting it and then we can drop
+it and the iso2 and iso3 columns
+```{r}
+who3 %>%
+  count(new)
+
+(who4 <- who3 %>%
+  select(-new, -iso2, -iso3))
+```
+Next separate sexage by splitting after the first character
+```{r}
+(who5 <- who4 %>%
+   separate(sexage, c('sex', 'age'), sep = 1))
+```
+
+The who dataset is now tidy !
+Usually, you would build up this complex pipeline in one
+code block.
+
+### 12.6.1 Exercises
+
+1. In this case study I set values_drop_na = TRUE just to make it easier to check that we had the correct values. Is this reasonable? Think about how missing values are represented in this dataset. Are there implicit missing values? What’s the difference between an NA and zero?
+
+If we had not dropped na values in pivot_longer, we may have
+rows where the we have country, year, etc, but NA values for
+the columns we specified. Also, the number of cases would be
+0 (since there were no tests done). So for this case, it is
+reasonable to have implicit missing values. We cannot add
+data that we don't have by filling it in - it does not make
+sense here to do so.
+
+NA is an indicator of a value that we don't know or could not
+capture. A 0 is a value we have captured. We have to make sure
+that in our dataset the correct flag is used to indicate an
+abscence of a value. It may be the string 'na', or any value
+that is unique.
+
+2. What happens if you neglect the mutate() step? (mutate(names_from = stringr::str_replace(key, "newrel", "new_rel")))
+
+Without the mutate step, the new column would not be correctly
+filled. In fact, there would also be some crossover of values
+between the adjacent columns and the new column.
+
+3. I claimed that iso2 and iso3 were redundant with country. Confirm this claim.
+
+The [IBAN website]('https://www.iban.com/country-codes')
+lists the country names and ISO2/3 codes of those countries.
+Looking at the first few countries, we can see that the
+country name and ISO2/3 codes match - so this is indeed
+redundant
+
+4. For each country, year, and sex compute the total number of cases of TB. Make an informative visualisation of the data.
+
+Let's see what we're dealing with first.
+```{r}
+# There are many countries, and much less years.
+# Maybe this tells us how to plot the graph.
+(n_distinct(who5 %>% pull(year)))
+(n_distinct(who5 %>% pull(country)))
+
+who5 %>%
+  filter(year > 1995) %>%
+  group_by(country, year, sex) %>%
+  summarize(cases = sum(cases)) %>%
+  unite(country_sex, country, sex, remove = FALSE) %>%
+  ggplot(aes(year, cases, group = country_sex, color = sex)) +
+  geom_line()
+```
+This plot is really unsatisfactory. I guess it was a difficult
+problem to solve. What was done here was to combine two
+categorical columns into one, and use it to group for the plot.
