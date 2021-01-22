@@ -596,9 +596,39 @@ who5 %>%
   group_by(country, year, sex) %>%
   summarize(cases = sum(cases)) %>%
   unite(country_sex, country, sex, remove = FALSE) %>%
-  ggplot(aes(year, cases, group = country_sex, color = sex)) +
+  ggplot(aes(year, cases, 
+             group = country_sex, 
+             color = sex
+             )) +
   geom_line()
 ```
 This plot is really unsatisfactory. I guess it was a difficult
 problem to solve. What was done here was to combine two
 categorical columns into one, and use it to group for the plot.
+
+A better way would be look at all the median and last values
+of each country. Then we can decide which ones are important.
+Instead of the number of cases, the rate of cases per 10000
+would be better to look at, but we will leave that for
+another day.
+```{r}
+who5 %>%
+  group_by(country, sex) %>%
+  mutate(median = median(cases, na.rm = TRUE),
+         # last = tail(1) # dont know how to do this
+         )
+```
+
+## 12.7 Non-tidy data
+
+Reasons to use data structures other than tidydata:
+
+  * Memory or speed improvements
+  * Specialized fields that have evolved to solve problems
+    specific problems
+    
+Usually, when you have a rectangular data structure,
+tidydata is the best choice. But there are other choices.
+
+For non-tidydata, check out 
+[Jeff Leek's blogpost]('http://simplystatistics.org/2016/02/17/non-tidy-data/')
