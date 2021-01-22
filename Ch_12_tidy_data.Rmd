@@ -1,0 +1,275 @@
+---
+title: "Ch_12_tidy_data"
+author: "Samir Gadkari"
+date: "1/21/2021"
+output: html_document
+---
+
+Organize your data into the tidy data format for easier processing
+later using tidyverse.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+read_path = Sys.getenv('DATASETS')
+write_path = paste(read_path, 'output', sep = '/')
+working_dir = Sys.getenv('R_WORKING_DIR')
+
+full_read_path <- function(filename) {
+  paste(read_path, filename, sep = '/')
+}
+
+full_write_path <- function(filename) {
+  paste(write_path, filename, sep = '/')
+}
+
+full_wd_path <- function(filename) {
+  paste(working_dir, filename, sep = '/')
+}
+```
+
+There are three interrelated rules which make a dataset tidy:
+
+  1. Each variable must have its own column.
+  2. Each observation must have its own row.
+  3. Each value must have its own cell.
+```{r}
+table1
+table2
+table3
+table4a
+table4b
+```
+
+table1 is the only one that satisfies the tidy data format
+in the above tables.
+
+Why should you store data in the tidy format?
+
+  1. With data in a single format, the techniques you use will
+     be consistent across datasets
+  2. The tidy format allows R's vectorized nature to shine.
+     This will make your processing faster
+     
+All tidyverse packages are designed to work with tidy data.
+```{r}
+(table1)
+
+# The multiplier of 10000 gives us the rate per 10000 people
+table1 %>%
+  mutate(rate = cases / population * 10000)
+
+table1 %>%
+  count(year, wt = cases)
+```
+
+```{r}
+ggplot(table1, aes(year, cases)) +
+  geom_line(aes(group = country), color = 'grey50') +
+  geom_point(aes(color = country))
+```
+
+### 12.2.1 Exercises
+
+1. Using prose, describe how the variables and observations are organised in each of the sample tables.
+
+In table1, the country, year, cases, and population are distinct.
+Each row refers to a single observation. If we wanted, we could
+easily find the rate of cases, or group by a country and plot
+cases, or group by a year and plot cases in each country.
+
+In table2, the type variable is a problem if we want to find
+the rate. We have to write some involved code to get it.
+
+In table3, the rate is made up of two variables. To get
+the individual variables from it, you have to write a regex
+and parse the rate.
+
+In table4a/b, the cases and populations are in two different
+tables. Maybe we have to merge them to get one table with all
+columns, before finding the rate
+
+2. Compute the rate for table2, and table4a + table4b. You will need to perform four operations:
+
+    Extract the number of TB cases per country per year.
+    Extract the matching population per country per year.
+    Divide cases by population, and multiply by 10000.
+    Store back in the appropriate place.
+
+Which representation is easiest to work with? Which is hardest? Why?
+
+```{r}
+table2
+
+(tb_cases_per_country_year = table2 %>%
+  filter(type == 'cases') %>%
+  pull(count))
+(tb_pop_per_country_year = table2 %>%
+  filter(type == 'population') %>%
+  pull(count))
+(rate = tb_cases_per_country_year / 
+    tb_pop_per_country_year)
+
+table2 %>%
+  mutate(rate = rep(rate, each = 2))
+```
+
+3. Recreate the plot showing change in cases over time using table2 instead of table1. What do you need to do first?
+
+What we have to do is create a separate table with country,
+year and number of cases. We can do this by filtering in
+the type == 'cases' which will filter out the 
+type == 'population'.
+```{r}
+table2 %>%
+  filter(type == 'cases') %>%
+  ggplot(aes(year, count)) +
+  geom_line(aes(group = country), color = 'grey50') +
+  geom_point(aes(color = country)) +
+  scale_x_continuous(breaks = unique(table2$year)) +
+  ylab('cases')
+```
+
+## 12.3 Pivoting
+
+Most datasets that are untidy suffer from one or both of
+these problems:
+
+  * A variable is spread across rows
+  * A variable is spread across columns
+
+pivot_longer and pivot_wider function help solve this problem
+
+### 12.3.1 Longer
+
+Sometimes, column names are actually variable values.
+In the case of table4a, there should be another column
+with the name 'year', whose values are 1999 and 2000.
+We will also have to move the column values that are already
+present into another column called 'cases'.
+```{r}
+table4a
+
+(tidy4a <- table4a %>%
+  pivot_longer(c(`1999`, `2000`), # columns to pivot.
+                                  # specified with select style
+                                  # notation.
+               names_to = 'year', # year and cases don't exist,
+               values_to = 'cases') # so we put them in quotes.
+)
+```
+```{r}
+table4b
+
+(tidy4b <- table4b %>%
+  pivot_longer(c(`1999`, `2000`),
+               names_to = 'year',
+               values_to = 'population'))
+```
+To combine the two tables into one, use dplyr::left_join
+```{r}
+left_join(tidy4a, tidy4b)
+```
+
+### 12.3.2 Wider
+
+When an observation is scattered across multiple rows,
+use pivot_wider. With pivot_wider, we need only two parameters:
+
+  * the column to take names from
+  * the column to take values from
+
+```{r}
+table2
+
+table2 %>%
+  pivot_wider(names_from = type,
+              values_from = count)
+```
+
+### 12.3.3 Exercises
+
+1. Why are pivot_longer() and pivot_wider() not perfectly symmetrical?
+Carefully consider the following example:
+```{r}
+(stocks <- tibble(
+  year   = c(2015, 2015, 2016, 2016),
+  half  = c(   1,    2,     1,    2),
+  return = c(1.88, 0.59, 0.92, 0.17)
+))
+
+(stocks %>% 
+  pivot_wider(names_from = year, 
+              values_from = return))
+
+(stocks %>% 
+  pivot_wider(names_from = year, 
+              values_from = return) %>% 
+  pivot_longer(`2015`:`2016`, 
+               names_to = "year", 
+               values_to = "return"))
+```
+pivot_longer and pivot_wider are symmetrical in the sense that
+the table when applied to both contain the same named columns,
+just in a different order. The order is different because the
+column/s that don't change (the column half here) are written
+to the new tibble first, then the other columns are added in.
+
+pivot_longer() has a names_ptypes argument, e.g.  names_ptypes = list(year = double()). What does it do?
+
+The names_ptypes is used to ensure that the created column
+has the type we expect. The value given into the names_ptypes
+is a zero-length vector (in this case double()).
+
+2. Why does this code fail?
+```{r}
+table4a %>% 
+  pivot_longer(c(1999, 2000), names_to = "year", values_to = "cases")
+```
+It fails because column names cannot be invalid R variable
+names unless you use backticks around them. Here 1999, and 2000
+are invalid since they begin with a number.
+
+3. What would happen if you widen this table? Why? How could you add a new column to uniquely identify each value?
+```{r}
+(people <- tribble(
+  ~name,             ~names,  ~values,
+  #-----------------|--------|------
+  "Phillip Woods",   "age",       45,
+  "Phillip Woods",   "height",   186,
+  "Phillip Woods",   "age",       50,
+  "Jessica Cordero", "age",       37,
+  "Jessica Cordero", "height",   156
+))
+```
+This table contains 3 instances of 'Phillip Woods' with two
+different age values. It is also missing a height for the
+second 'Phillip Woods'.
+
+If we filter out the third value, we can use pivot_wider
+to get a tidy dataframe:
+```{r}
+(people %>%
+  filter(row_number() %in% c(1, 2, 4, 5)) %>%
+  pivot_wider(names_from = names, values_from = values))
+```
+
+4. Tidy the simple tibble below. Do you need to make it wider or longer? What are the variables?
+
+```{r}
+(preg <- tribble(
+  ~pregnant, ~male, ~female,
+  "yes",     NA,    10,
+  "no",      20,    12
+))
+
+preg %>%
+  pivot_longer(c(male, female),
+               names_to = 'sex',
+               values_to = 'count')
+```
+
+## 12.4 Separating and uniting
+
+
