@@ -4,10 +4,16 @@ author: "Samir Gadkari"
 date: "1/18/2021"
 output: html_document
 ---
+
 ```{r}
 library(tidyverse)
+library(hms) # for representing time in hh:mm:ss am/pm
+library(feather) # file format common across programming
+                 # languages. Save tibbles in this format to
+                 # give to other users.
 read_path = Sys.getenv('DATASETS')
 write_path = paste(read_path, 'output', sep = '/')
+working_dir = Sys.getenv('R_WORKING_DIR')
 
 full_read_path <- function(filename) {
   paste(read_path, filename, sep = '/')
@@ -15,6 +21,10 @@ full_read_path <- function(filename) {
 
 full_write_path <- function(filename) {
   paste(write_path, filename, sep = '/')
+}
+
+full_wd_path <- function(filename) {
+  paste(working_dir, filename, sep = '/')
 }
 ```
 
@@ -291,5 +301,337 @@ parse_number("123'456'789",
 ```
     
 ## 11.3.2 Strings
+```{r}
+charToRaw('Hadley') # shows hex byte values of string
+```
+By default, strings are encoded in ASCII in R.
+The readr library uses UTF-8 everywhere. This is a good default,
+but will fail for data used by older systems.
+```{r}
+(x1 <- "El Ni\xf1o was particularly bad this year")
+(x2 <- "\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd")
+parse_character(x1, locale = locale(encoding = 'Latin1'))
+parse_character(x2, locale = locale(encoding = 'Shift-JIS'))
+```
+readr provides guess_encoding function which guesses the
+encoding by reading the bytes in the file. It's not foolproof,
+but it works better if there are more characters for it to read
+in the file.
+```{r}
+guess_encoding(charToRaw(x1))
+guess_encoding(charToRaw(x2))
+```
+More encoding information at:
+[]('http://kunststube.net/encoding/')
 
+## 11.3.3 Factors
+
+Give the parse_factor function a vector of known levels to
+produce an error when an unknown factor is present
+```{r}
+fruit <- c('apple', 'banana')
+parse_factor(c('apple', 'banana', 'bananana'),
+             levels = fruit)
+```
+If there are many errors, it is easier to keep the column
+as a string, and use the tools in Ch 14 (Strings) and
+Ch 15 (Factors) to clean them up.
+
+## 11.3.4 Dates, date-times, and times
+
+* parse_datetime
+
+  + returns number of days since 1970-01-01
+  
+  + expects an ISO8601 date-time
+  
+    yyyy-mm-ddThhmmss (the T should appear as-is in the string).
+    If time is omitted, it will be midnight the same day.
+
+```{r}
+parse_datetime('2010-10-01T2010')
+```
+
+* parse_date
+
+  + expects a four digit year, a - or /, the month, 
+    a - or /, then the day
+
+  + returns number of seconds since 1970-01-01
+  
+```{r}
+parse_date('2010-10-01')
+```
+
+* parse_time
+
+  + expects the hour, :, minutes, optionally : and seconds, 
+    and an optional am/pm specifier
     
+  + returns number of seconds since midnight
+
+```{r}
+parse_time('01:10 am')
+parse_time('20:10:01')
+```
+
+If these are not enough, you can pass a format to
+parse_date and parse_datetime:
+
+  * Year: %Y (4 digits), %y (2 digits)
+  
+  * Month: %m (2 digits), %b (ex. 'Jan'), %B (ex. 'January')
+  
+  * Day: %d (2 digits), %e (optional leading space)
+  
+  * Time: 
+  
+    - %H (0-23 hour), 
+          
+    - %I (0-12 hour, must use %p),
+    - %p (AM/PM indicator),
+    - %M (minutes),
+    - %S (integer seconds),
+    - %OS (real seconds),
+    - %Z (time zone, ex. America/Chicago),
+    - %z (offset from UTC, ex. +0800),
+    - %. (skip one non-digit character when parsing),
+    - %* (skips any number of non-digits when parsing)
+```{r}
+parse_date('01/02/15', '%m/%d/%y')
+parse_date('01/02/15', '%d/%m/%y')
+parse_date('01/02/15', '%y/%m/%d')
+parse_date("1 janvier 2015", "%d %B %Y", 
+           locale = locale("fr"))
+```
+
+## 11.3.5 Exercises
+
+1. What are the most important arguments to locale()?
+
+decimal_mark, grouping_mark, encoding
+
+2. What happens if you try and set decimal_mark and grouping_mark to the same character? What happens to the default value of grouping_mark when you set decimal_mark to “,”? What happens to the default value of decimal_mark when you set the grouping_mark to “.”?
+
+3. I didn’t discuss the date_format and time_format options to locale(). What do they do? Construct an example that shows when they might be useful.
+
+date_format and time_format parameters to locale might be
+useful when the default date/time formats do not match
+the one in the data.
+
+7. Generate the correct format string to parse each of the following dates and times:
+```{r}
+d1 <- "January 1, 2010"
+parse_date(d1, '%B%.%d%*%Y')
+
+d2 <- "2015-Mar-07"
+parse_date(d2, '%Y%.%b%.%d')
+
+d3 <- "06-Jun-2017"
+parse_date(d3, '%d%.%b%.%Y')
+
+d4 <- c("August 19 (2015)", "July 1 (2015)")
+parse_date(d4, '%B%.%d%*%Y%.')
+
+d5 <- "12/30/14" # Dec 30, 2014
+parse_date(d5, '%m%.%d%.%y')
+
+t1 <- "1705"
+parse_date(t1, '%Y')
+
+t2 <- "11:15:10.12 PM"
+parse_time(t2, '%I%.%M%.%OS%.%p')
+```
+## 11.4 Parsing a file
+
+In this section, you will learn:
+
+  * How does readr automatically guess the type of each column.
+
+  * How to override the default specification.
+
+### 11.4.1 Strategy
+
+readr uses heuristics on the first 1000 rows to guess 
+column types. The guess_parser function returns readr's
+best guess, the parse_guess function uses that guess to
+parse the column.
+```{r}
+guess_parser('2010-10-01')
+guess_parser(c('TRUE', 'FALSE'))
+guess_parser('15:01')
+guess_parser(c('1', '5', '9'))
+guess_parser('109,258,350')
+
+str(parse_guess('2010-10-01'))
+```
+
+The heuristic tries each of the following types, stopping when it finds a match:
+
+    * logical: contains only “F”, “T”, “FALSE”, or “TRUE”.
+    
+    * integer: contains only numeric characters (and -).
+    
+    * double: contains only valid doubles (including numbers
+              like 4.5e-5).
+    
+    * number: contains valid doubles with the
+              grouping mark inside.
+    
+    * time: matches the default time_format.
+    
+    * date: matches the default date_format.
+    
+    * date-time: any ISO8601 date.
+
+If none of these rules apply, then the column will stay as a vector of strings.
+
+### 11.4.2 Problems
+
+For larger files, there are two main problems:
+
+  * The first 1000 rows may be a special case. ex:
+    You have a column of doubles, but the first 1000 are
+    integers
+  
+  * If the first 1000 rows contain only NAs, readr will guess
+    that it's a logical vector
+    
+readr contains a challenging csv which will show you both
+these problems.
+```{r}
+challenge <- read_csv(readr_example('challenge.csv'))
+```
+```{r}
+problems(challenge)
+```
+A good way is to fix each issue a column at a time.
+Let's fix it for column y:
+```{r}
+tail(challenge)
+```
+We can see that the x column are made of doubles, and that
+many of y's values are NA, while the actual
+values shown for rows from 1001 are dates. Let's use the
+col_date specification for the y column:
+```{r}
+challenge <- read_csv(
+  readr_example('challenge.csv'),
+  col_types = cols(
+    x = col_double(),
+    y = col_date()
+  )
+)
+
+tail(challenge)
+```
+Each parse_* function has a corresponding col_* function.
+
+  * parse_* functions are used to read from strings.
+
+  * col_* functions are used by the file parser.
+  
+Always use col_* functions when reading files. This ensures
+that the data is of the correct type when you have to use it
+later on in the code. If the given file has the wrong type,
+you will error out, instead of going through part of your code,
+and not know why it does not work. Use stop_for_problems
+function to guarantee readr will stop if it encounters a problem
+reading a file.
+
+### 11.4.3 Other strategies
+
+The challenge.csv file is made to show readr problems.
+Even with that file, if we have used just one more row
+to parse, we would have the right data in a tibble:
+```{r}
+challenge2 <- read_csv(readr_example("challenge.csv"), 
+                       guess_max = 1001)
+```
+
+You can also read in all columns as character vectors,
+and then use the type_convert function to update the types:
+```{r}
+(df <- tribble(
+  ~x, ~y,
+  '1', '1.32',
+  '2', '.2',
+  '3', '3.33'
+))
+
+type_convert(df)
+```
+
+For very large files, set n_max to a smaller number (say
+10,000 or 100,000) until you can read the file correctly.
+
+For hard parsing problems, read each line in a file into
+a character string using the read_lines function.
+You can even use the read_file function to read the file
+into a character vector of length 1.
+```{r}
+df <- read_file(readr_example('challenge.csv'))
+View(df)
+```
+
+## Writing to a file
+
+Use readr::write_csv and readr::write_tsv to write to disk.
+Make sure to:
+
+  * Always encode strings in UTF-8 before writing
+  
+  * Always encode dates/times in ISO8601 format
+  
+This way, the files can be easily read in later.
+
+To export to Excel, use the write_excel_csv function.
+This tells Excel that you're using UTF-8 encoding.
+
+```{r}
+write_csv(challenge, full_wd_path('challenge.csv'))
+read_csv(full_wd_path('challenge.csv'))
+```
+Note that type information is lost when you save to a csv.
+So csv's are not a good way to cache interim results, since
+you have to parse them on each read. Instead:
+
+  1. Use read_rds and write_rds functions to save in R's
+     custom binary format. This way you don't lose
+     column type information
+```{r}
+write_rds(challenge, full_wd_path('challenge.csv'))
+read_rds(full_wd_path('challenge.csv'))
+```
+    2. Use feather package's write_feather, read_feather
+       functions
+       
+       feather is faster than RDS, and is usable outside R.
+       But RDS supports list columns, which feather does not.
+```{r}
+write_feather(challenge, full_wd_path('challenge.csv'))
+read_feather(full_wd_path('challenge.csv'))
+```
+
+## 11.6 Other types of data
+
+For other types of rectangular data:
+
+    * haven reads SPSS, Stata, and SAS files.
+
+    * readxl reads excel files (both .xls and .xlsx).
+
+    * DBI, along with a database specific backend 
+      (e.g. RMySQL, RSQLite, RPostgreSQL etc) 
+      allows you to run SQL queries against a database 
+      and return a data frame.
+
+For hierarchical data: 
+
+    * use jsonlite (by Jeroen Ooms) for json, and 
+    
+    * xml2 for XML. 
+    
+Jenny Bryan has some excellent worked examples at https://jennybc.github.io/purrr-tutorial/.
+
+For other file types, try the [R data import/export manual]('https://cran.r-project.org/doc/manuals/r-release/R-data.html') and the rio package.
