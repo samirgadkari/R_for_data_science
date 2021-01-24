@@ -181,3 +181,282 @@ How would you characterise the relationship between the Batting, Pitching, and F
 
 ## 13.4 Mutating joins
 
+Combines two table variables into one output table.
+Since tables get wide, we will start off with narrower tables:
+```{r}
+(flights2 <- flights %>% 
+  select(year:day, hour, origin, dest, tailnum, carrier))
+```
+Let's combine this table with airlines to get the full airline
+name:
+```{r}
+flights2 %>%
+  select(-origin, -dest) %>% # making table even more narrower
+  left_join(airlines, by = 'carrier')
+```
+
+### 13.4.1 Understanding joins
+
+```{r}
+(x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     3, "x3"
+))
+(y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2",
+     4, "y3"
+))
+```
+
+### 13.4.2 Inner join
+
+The result of an inner join contains values where the
+keys match.
+```{r}
+x %>%
+  inner_join(y, by = 'key')
+```
+
+### 13.4.3 Outer joins
+
+Three types of outer joins:
+
+  * left join: keep all values of left table, append with
+               variables from matching keys in right table
+  * right_join: keep all values of right table, append with
+               variables from matching keys in left table
+  * full_join: keep all values from both tables
+  
+Out of the outer joins, the left join is usually used.
+This is because you can add information from another table
+to this table.
+
+### 13.4.4 Duplicate keys
+
+What happens when keys are not unique?
+
+1. If only one table has duplicate keys:
+![left_join when one table has duplicate keys](images/one_table_duplicate_values.png)
+```{r}
+(x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     2, "x3",
+     1, "x4"
+))
+(y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2"
+))
+
+left_join(x, y, by = 'key')
+```
+
+2. Both tables have duplicate values
+
+The output is a combinatation of all possible values
+of the duplicate keys.
+
+![left_join result when both tables have duplicate values](images/left_join_duplicate_keys.png)
+```{r}
+(x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     2, "x3",
+     3, "x4"
+))
+(y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2",
+     2, "y3",
+     3, "y4"
+))
+left_join(x, y, by = "key")
+```
+
+### 13.4.5 Defining the key columns
+
+key column specification can be:
+
+  * by = NULL (default): all variables that are common in both tables
+      are used as keys. This is called a natural join.
+  * by = 'x': a character vector used to join. If there are other variables that
+      are common across tables, the output will disambiguate them by adding a
+      suffix to their names: "varname.x" and "varname.y"
+  * by = c('a' = 'b'): matches key a in x with key b in y.
+      The output will contain the variable named a.
+
+by = NULL example:
+```{r}
+flights2 %>%
+  left_join(weather)
+```
+
+by = 'x' example:
+```{r}
+flights2 %>%
+  left_join(planes, by = 'tailnum')
+```
+
+by = c('a' == 'b') example:
+```{r}
+flights2 %>%
+  left_join(airports, by = c('dest' = 'faa')) # or 'origin' == 'faa'
+```
+
+### 13.4.6 Exercises
+
+1. Compute the average delay by destination, then join on the airports data frame so you can show the spatial distribution of delays. 
+```{r}
+flights %>%
+  group_by(dest) %>%
+  summarize(avg_arr_delay = mean(arr_delay, na.rm = TRUE)) %>%
+  ggplot(aes(avg_arr_delay)) +
+  geom_histogram(bins = 30)
+```
+Here’s an easy way to draw a map of the United States:
+```{r}
+airports %>%
+  semi_join(flights, c("faa" = "dest")) %>%
+  ggplot(aes(lon, lat)) +
+    borders("state") +
+    geom_point() +
+    coord_quickmap()
+```
+Using the above code, and incorporating it to get the avg_arr_delay
+per destination map:
+```{r}
+flights %>%
+  select(dest, arr_delay) %>%
+  left_join(airports, by = c('dest' = 'faa')) %>%
+  group_by(dest) %>%
+  summarize(avg_arr_delay = mean(arr_delay, na.rm = TRUE),
+            lat = lat,
+            lon = lon) %>%
+  filter(!is.na(avg_arr_delay)) %>%
+  distinct() %>%
+  ggplot(aes(lon, lat, color = avg_arr_delay)) +
+  borders('state') +
+  geom_point()
+```
+
+
+2. Add the location of the origin and destination (i.e. the lat and lon) to flights.
+
+```{r}
+flights %>%
+  left_join(airports, by = c('dest' = 'faa'))
+```
+
+3. Is there a relationship between the age of a plane and its delays?
+
+```{r}
+flights %>%
+  left_join(planes, by = 'tailnum') %>%
+  select(tailnum, year.x, year.y, arr_delay) %>%
+  mutate(age = year.x - year.y) %>%
+  filter(!is.na(age)) %>%
+  ggplot(aes(age, arr_delay)) +
+  geom_point(alpha = 1/10, na.rm = TRUE)
+```
+
+You can see that the delays seem like they're going down with age,
+but the number of flights of the older planes are much smaller.
+So let's try this by grouping by age and taking the median values.
+```{r}
+flights %>%
+  left_join(planes, by = 'tailnum') %>%
+  select(tailnum, year.x, year.y, arr_delay) %>%
+  mutate(age = year.x - year.y) %>%
+  filter(!is.na(age)) %>%
+  ggplot(aes(age, arr_delay)) +
+  geom_hex(rm.na = TRUE)
+```
+
+From the above, it definitely looks like the arrival delays are less
+for older planes. Maybe this is because older planes are used for
+longer flights, and they can make up delays during those flights.
+
+4. What weather conditions make it more likely to see a delay?
+
+Since weather gives the weather at the 3 NY area airports,
+we must look at just the departure delays.
+```{r}
+flights %>%
+  separate(dep_time, 
+           into = c('hour', 'hundredths_of_hr'),
+           sep = 1,
+           convert = TRUE) %>%
+  left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
+  ggplot(aes(visib, dep_delay)) +
+  geom_hex(na.rm = TRUE)
+  
+flights %>%
+  separate(dep_time, 
+           into = c('hour', 'hundredths_of_hr'),
+           sep = 1,
+           convert = TRUE) %>%
+  left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
+  ggplot(aes(temp, dep_delay)) +
+  geom_hex(na.rm = TRUE)
+  
+flights %>%
+  separate(dep_time, 
+           into = c('hour', 'hundredths_of_hr'),
+           sep = 1,
+           convert = TRUE) %>%
+  left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
+  ggplot(aes(pressure, dep_delay)) +
+  geom_hex(na.rm = TRUE)
+```
+
+The counts look the same for each hex bin, but they're showing more delays
+when visib is larger. This must mean visibility is poorer when visib
+is larger - so the delays are larger.
+
+For the temperature vs dep_delay, the result is not so clear. It seems
+that there are more delays when the temperature is 75 vs 25, but that
+could just be because there are more flights scheduled during summer
+months since people are flying for vacation at that time.
+
+For pressure vs dep_delay, it looks like the pressure from 1010
+through 1030 has more delays than less or more pressure. Maybe a
+hurricane was forming, and that delayed flights from landing in the
+southeast, which delayed takeoff from New York airports.
+
+5. What happened on June 13 2013? Display the spatial pattern of delays, and then use Google to cross-reference with the weather.
+
+```{r}
+flights %>%
+  filter(year == 2013, month == 6, day == 13) %>%
+  left_join(weather, by = c('year', 'month', 'day')) %>%
+  ggplot(aes(visib, dep_delay)) +
+  geom_hex(rm.na = TRUE)
+
+flights %>%
+  filter(year == 2013, month == 6, day == 13) %>%
+  left_join(weather, by = c('year', 'month', 'day')) %>%
+  ggplot(aes(temp, dep_delay)) +
+  geom_hex(rm.na = TRUE)
+
+flights %>%
+  filter(year == 2013, month == 6, day == 13) %>%
+  left_join(weather, by = c('year', 'month', 'day')) %>%
+  ggplot(aes(pressure, dep_delay)) +
+  geom_hex(rm.na = TRUE)
+```
+
+The delays are both small and large. The small delays are probably
+due to flights going to places other than the southeast US.
+Due to hurricanes, this area was impacted. Although we cannot tell
+from the visibility, temperature, and pressure in New York, delays
+in the SE would cause planes to be delayed in NY due to a chain reaction.
+This was confirmed from googling the June 13 2013 date.
