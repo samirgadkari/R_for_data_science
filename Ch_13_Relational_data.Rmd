@@ -9,6 +9,7 @@ output: html_document
 library(tidyverse)
 library(nycflights13)
 library(ggplot2)
+library(RcppRoll)
 
 read_path = Sys.getenv('DATASETS')
 write_path = paste(read_path, 'output', sep = '/')
@@ -378,7 +379,9 @@ flights %>%
   mutate(age = year.x - year.y) %>%
   filter(!is.na(age)) %>%
   ggplot(aes(age, arr_delay)) +
-  geom_hex(rm.na = TRUE)
+  geom_hex(aes(fill = stat(log(count))), # instead of plotting count,
+                                         # plot the log(count).
+           rm.na = TRUE)
 ```
 
 From the above, it definitely looks like the arrival delays are less
@@ -397,7 +400,7 @@ flights %>%
            convert = TRUE) %>%
   left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
   ggplot(aes(visib, dep_delay)) +
-  geom_hex(na.rm = TRUE)
+  geom_hex(aes(fill = stat(log(count))), na.rm = TRUE)
   
 flights %>%
   separate(dep_time, 
@@ -406,7 +409,7 @@ flights %>%
            convert = TRUE) %>%
   left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
   ggplot(aes(temp, dep_delay)) +
-  geom_hex(na.rm = TRUE)
+  geom_hex(aes(fill = stat(log(count))), na.rm = TRUE)
   
 flights %>%
   separate(dep_time, 
@@ -415,7 +418,16 @@ flights %>%
            convert = TRUE) %>%
   left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
   ggplot(aes(pressure, dep_delay)) +
-  geom_hex(na.rm = TRUE)
+  geom_hex(aes(fill = stat(log(count))), na.rm = TRUE)
+
+flights %>%
+  separate(dep_time, 
+           into = c('hour', 'hundredths_of_hr'),
+           sep = 1,
+           convert = TRUE) %>%
+  left_join(weather, by = c('year', 'month', 'day', 'hour')) %>%
+  ggplot(aes(wind_speed, dep_delay)) +
+  geom_hex(aes(fill = stat(log(count))), na.rm = TRUE)
 ```
 
 The counts look the same for each hex bin, but they're showing more delays
@@ -439,19 +451,19 @@ flights %>%
   filter(year == 2013, month == 6, day == 13) %>%
   left_join(weather, by = c('year', 'month', 'day')) %>%
   ggplot(aes(visib, dep_delay)) +
-  geom_hex(rm.na = TRUE)
+  geom_hex(aes(fill = stat(log(count))), rm.na = TRUE)
 
 flights %>%
   filter(year == 2013, month == 6, day == 13) %>%
   left_join(weather, by = c('year', 'month', 'day')) %>%
   ggplot(aes(temp, dep_delay)) +
-  geom_hex(rm.na = TRUE)
+  geom_hex(aes(fill = stat(log(count))), rm.na = TRUE)
 
 flights %>%
   filter(year == 2013, month == 6, day == 13) %>%
   left_join(weather, by = c('year', 'month', 'day')) %>%
   ggplot(aes(pressure, dep_delay)) +
-  geom_hex(rm.na = TRUE)
+  geom_hex(aes(fill = stat(log(count))), rm.na = TRUE)
 ```
 
 The delays are both small and large. The small delays are probably
@@ -460,3 +472,181 @@ Due to hurricanes, this area was impacted. Although we cannot tell
 from the visibility, temperature, and pressure in New York, delays
 in the SE would cause planes to be delayed in NY due to a chain reaction.
 This was confirmed from googling the June 13 2013 date.
+
+### 13.4.7 Other implementations
+
+Translating to SQL:
+inner_join(x, y, by = "z") 	SELECT * FROM x INNER JOIN y USING (z)
+left_join(x, y, by = "z") 	SELECT * FROM x LEFT OUTER JOIN y USING (z)
+right_join(x, y, by = "z") 	SELECT * FROM x RIGHT OUTER JOIN y USING (z)
+full_join(x, y, by = "z") 	SELECT * FROM x FULL OUTER JOIN y USING (z)
+inner_join(x, y, by = c("a" = "b")) SELECT * FROM x INNER JOIN y ON x.a = y.b
+
+INNER and OUTER are optional and usually omitted.
+
+SQL allows joins that don't require keys to be equal using the last
+type of syntax above. For example, you could say
+SELECT * FROM x INNER JOIN y ON x.a > y.b
+These are called non-equijoins.
+[Example of non-equijoin]('https://www.w3resource.com/sql/joins/perform-a-non-equi-join.php')
+
+## Filtering joins
+
+Filtering joins filter observations, not the variables.
+
+semi_join(x, y): keep all observations from x that have a match in y.
+
+  * useful for matching filtered summary tables back to the original rows.
+  * never duplicate rows, like mutating joins
+
+anti_join(x, y): drop all observations from x that have a match in y
+
+  * useful for diagnosing join mismatches.
+  
+```{r}
+(top_dest <- flights %>%
+  count(dest, sort = TRUE) %>%
+  head(10))
+
+# To find flights that went to one of those destinations:
+(flights %>%
+  semi_join(top_dest)) # by default, it does a natural join
+                       # matching all common variables in both tables.
+```
+
+![Semi-join](./images/semi_join.png)
+
+Using anti_join and count, you can tell how many flights are missing
+a tailnum.
+
+```{r}
+flights %>%
+  anti_join(planes, by = 'tailnum') %>%
+  count(tailnum, sort = TRUE)
+```
+
+### 13.5.1 Exercises
+
+1. What does it mean for a flight to have a missing tailnum? What do the tail numbers that don’t have a matching record in planes have in common? (Hint: one variable explains ~90% of the problems.)
+
+```{r}
+(no_tailnum <- flights %>%
+  anti_join(planes, by = 'tailnum') %>%
+  filter(is.na(tailnum)))
+```
+
+Just looking at this table, it looks like there is no dep_time for most
+flights. If a flight was grounded, even though it was scheduled,
+there would be no tailnum. Let's confirm:
+```{r}
+no_tailnum %>%
+  filter(is.na(dep_time)) %>%
+  count()
+```
+
+So all the planes that are missing a tailnum are also missing a dep_time.
+
+2. Filter flights to only show flights with planes that have flown at least 100 flights.
+```{r}
+(flights_gt_100 <- flights %>%
+  group_by(tailnum) %>%
+  mutate(n = n()) %>%
+  filter(n >= 100) %>%
+  slice_head())  # slice_head or slice_tail selects the first or last row
+
+flights %>%
+  semi_join(flights_gt_100, by = 'tailnum')
+```
+
+2. Combine fueleconomy::vehicles and fueleconomy::common to find only the records for the most common models.
+
+```{r}
+fueleconomy::vehicles # contains all records
+fueleconomy::common   # contains only common vehicle models
+
+fueleconomy::vehicles %>%
+  semi_join(fueleconomy::common, by = c('make', 'model'))
+```
+
+4. Find the 48 hours (over the course of the whole year) that have the worst delays. Cross-reference it with the weather data. Can you see any patterns?
+
+```{r}
+(flights_hr_delay <- flights %>%
+  separate(dep_time, c('hour', 'min_in_hundreds'), sep = 1) %>%
+  mutate(hour = as.integer(hour)) %>%
+  group_by(year, month, day, hour, origin) %>%
+  summarise(prop_hr_delay = sum(dep_delay)/n()) %>%
+  select(year, month, day, hour, prop_hr_delay, origin) %>%
+  filter(!is.na(prop_hr_delay) | !is.na(day) | !is.na(hour)) %>%
+  arrange(desc(prop_hr_delay)) %>%
+  left_join(weather, by = c('year', 'month', 'day', 
+                            'hour', 'origin')))
+```
+```{r}
+scatter_plot <- function(data, x, name_x, y, name_y, alpha) {
+  data %>%
+    ggplot(mapping = aes(x = x, y = y)) +
+    geom_point(alpha = alpha, na.rm = TRUE) +
+    xlab(name_x) +
+    ylab(name_y)
+}
+
+scatter_plot(flights_hr_delay, 
+             flights_hr_delay$temp, 'temp',
+             flights_hr_delay$prop_hr_delay, 'delay',
+             1/5)
+scatter_plot(flights_hr_delay, 
+             flights_hr_delay$pressure, 'pressure',
+             flights_hr_delay$prop_hr_delay, 'delay',
+             1/5)
+scatter_plot(flights_hr_delay, 
+             flights_hr_delay$wind_speed, 'wind_speed',
+             flights_hr_delay$prop_hr_delay, 'delay',
+             1/5)
+scatter_plot(flights_hr_delay, 
+             flights_hr_delay$precip, 'precip',
+             flights_hr_delay$prop_hr_delay, 'delay',
+             1/5)
+scatter_plot(flights_hr_delay, 
+             flights_hr_delay$visib, 'visib',
+             flights_hr_delay$prop_hr_delay, 'delay',
+             1/5)
+scatter_plot(flights_hr_delay, 
+             flights_hr_delay$time_hour, 'time_hour',
+             flights_hr_delay$prop_hr_delay, 'delay',
+             1/5)
+
+```
+
+Patterns I see in the above plots:
+
+  * As precip increases, delays decrease
+  * As wind_speed increases, delays decrease
+
+5. What does anti_join(flights, airports, by = c("dest" = "faa")) tell you? What does anti_join(airports, flights, by = c("faa" = "dest")) tell you?
+
+anti_join(flights, airports, by = c("dest" = "faa")) returns observations
+whose dest does not match faa values in airports. You can use this to
+find out what faa values are missing from destinations in flights.
+```{r}
+anti_join(flights, airports, by = c("dest" = "faa"))
+```
+anti_join(airports, flights, by = c("faa" = "dest")) returns observations
+whose faa does not match dest values in flights. You can use this to
+find out what destinations are missing from faa values in airports.
+```{r}
+anti_join(airports, flights, by = c("faa" = "dest"))
+```
+
+6. You might expect that there’s an implicit relationship between plane and airline, because each plane is flown by a single airline. Confirm or reject this hypothesis using the tools you’ve learned above.
+
+```{r}
+flights %>%
+  group_by(tailnum) %>%
+  summarise(num_airlines_with_tailnum = 
+              n_distinct(carrier)) %>%
+  arrange(desc(num_airlines_with_tailnum))
+```
+So there are planes with the same tailnum that belonged to different
+carriers. Maybe they were sold by one carrier and bought by another.
+
