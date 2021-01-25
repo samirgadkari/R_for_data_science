@@ -650,3 +650,55 @@ flights %>%
 So there are planes with the same tailnum that belonged to different
 carriers. Maybe they were sold by one carrier and bought by another.
 
+## 13.6 Join problems
+
+Data does not come so clean. If it's dirty, your joins will not work.
+To help with this problem:
+
+  * Identify variables that form the primary key in each table based on
+    your knowledge of the data. If you just look for uniqueness to find
+    these primary keys, you may find them, but they may not be unique 
+    in a later version of the data
+  * A primary key variable must not have any missing values
+  * Your foreign keys must match the primary key in other tables.
+    It's common for keys not to match due to data entry errors.
+    You can find such keys using anti_join.
+    If you have missing keys, carefully consider if you should 
+    drop rows that don't have a match (for outer joins). 
+    Maybe you should use inner join instead.
+
+You cannot count rows after a join to ensure there are no dropped rows.
+If there are duplicate keys, the number of duplicated rows could 
+equal the number of dropped rows.
+
+## 13.7 Set operations
+
+These are not usually used, but are sometimes helpful when breaking a
+complex filter operation into multiple simpler pieces. These operations
+are applied to every variable in the dataframe, and expect the same
+variables in both dataframes.
+
+  * intersect(x, y): return only observations in both x and y.
+  * union(x, y):     return unique observations in x and y.
+  * setdiff(x, y):   return observations in x, but not in y.
+
+```{r}
+(df1 <- tribble(
+  ~x, ~y,
+   1,  1,
+   2,  1
+))
+(df2 <- tribble(
+  ~x, ~y,
+   1,  1,
+   1,  2
+))
+```
+
+```{r}
+intersect(df1, df2)
+union(df1, df2)
+setdiff(df1, df2)
+setdiff(df2, df1)
+```
+
