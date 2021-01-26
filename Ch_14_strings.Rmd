@@ -1,0 +1,332 @@
+---
+title: "Ch_14_Strings"
+author: "Samir Gadkari"
+date: "1/25/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+
+read_path = Sys.getenv('DATASETS')
+write_path = paste(read_path, 'output', sep = '/')
+working_dir = Sys.getenv('R_WORKING_DIR')
+
+full_read_path <- function(filename) {
+  paste(read_path, filename, sep = '/')
+}
+
+full_write_path <- function(filename) {
+  paste(write_path, filename, sep = '/')
+}
+
+full_wd_path <- function(filename) {
+  paste(working_dir, filename, sep = '/')
+}
+```
+
+This chapter is mostly about regular expressions. We use the stringr
+package that is a part of the tidyverse for string manipulation.
+Rules for declaring strings:
+
+  * Use double quotes "" to declare strings
+  * If you have to use " in a string, use '' to declare that string
+  * If you have to use both single and double quotes in a string,
+    use double quotes to declare the string, and then use the
+    \ character to escape the double quote within the string
+    
+I've been using single quotes for strings, but will not change to use
+double quotes from here on.
+```{r}
+x <- c("\'", "\\")
+x             # printing out the string will show escape characters in it.
+writeLines(x) # writeLines shows you how the string will look like
+```
+Special characters: "\n", "\t", "\\", "\"", "\'" 
+Use ?"'" to find help in the console for quotes and backslash characters.
+
+Unicode specified characters:
+```{r}
+x <- "\u00b5"
+x
+```
+
+### 14.2.1 String length
+```{r}
+str_length(c("a", "R for data science", NA))
+```
+
+### 14.2.2 Combining strings
+```{r}
+str_c("x", "y")
+str_c("x", "y", "z")
+str_c("x", "y", sep = ", ")
+```
+```{r}
+x <- c("abc", NA)
+str_c("|-", x, "-|")
+str_c("|-", str_replace_na(x), "-|")
+```
+As seen above str_c is vectorised. It automatically recycles shorter
+vectors to the same length as the longest:
+```{r}
+x <- c("a", "b", "c")
+str_c("prefix-", x, "-suffix")
+```
+
+str_c drops object of 0 lengths:
+```{r}
+name <- "Hadley"
+time_of_day <- "morning"
+birthday <- FALSE
+
+str_c("Good ", time_of_day, " ", name,
+      if (birthday) " and Happy Birthday.", # this becomes a 0-length
+                                            # strings and is dropped.
+      ".")
+```
+
+How sep and collapse are used by str_c if collapse is not NULL:
+1. Each vector is resized to the largest vector length using usual
+   recycling rules.
+2. The separator is placed between each vector.
+3. The collapse value is placed at the end of each row
+4. The string is collapsed row-by-row into a single value.
+   Each row, after it is printed, receives a space as a separator.
+If collapse is not specified, each row becomes a string in a vector.
+If collapse is specified, the output is a single character string.
+```{r}
+str_c(c("x", "y", "z"), c("a", "b", "c"), sep = ', ', collapse = "v ")
+# x  , a  v
+# y  , b  v
+# z  , c
+
+str_c(c("x", "y", "z"), c("a", "b", "c"), collapse = "v ")
+# x  a  v
+# y  b  v
+# z  c
+
+str_c(c("x", "y", "z"), c("a", "b", "c"), sep = ", ")
+# x  , a
+# y  , b
+# z  , c
+
+length(str_c(c("x", "y", "z"), c("a", "b", "c"), sep = ", "))
+```
+
+### 14.2.3 Subsetting strings
+
+You can extract parts of a string using str_sub:
+```{r}
+x <- c("Apple", "Banana", "Pear")
+str_sub(x, 1, 3)
+str_sub(x, -3, -1)  # negative numbers count from backwards
+
+str_sub("a", 1, 5)  # str_sub won't fail if the string is small.
+                    # It will just return as much as possible.
+
+# You can use the assignment form of str_sub to modify strings.
+# You can use:
+#   str_sub
+#   str_to_upper
+#   str_to_lower
+#   str_to_title
+str_sub(x, 1, 1) <- str_to_lower(str_sub(x, 1, 1))
+x
+```
+
+### 14.2.4 Locales
+
+Changing case is complicated because each language has a different way
+of changing case.
+```{r}
+# Turkish has two i's: with and without a dot, and it
+# has a different rule for capitalising them:
+str_to_upper(c("i", "ı"))
+str_to_upper(c("i", "ı"), 
+             locale = "tr") # locale specified by ISO639 language code.
+                            # Without a locale, the OS locale is used.
+                            # Specify locale to be consistent across
+                            # computers
+```
+
+Locale also affects sorting:
+```{r}
+x <- c("apple", "eggplant", "banana")
+str_sort(x, locale = "en") # English
+str_sort(x, locale = "haw") # Hawaiian
+```
+
+### 14.2.5 Exercises
+
+1. In code that doesn’t use stringr, you’ll often see paste() and paste0(). What’s the difference between the two functions? What stringr function are they equivalent to? How do the functions differ in their handling of NA?
+
+paste converts it's arguments into characters and concatenates them 
+into a single output using sep as separator.
+paste is equivalent to str_c with collapse set to the sep value.
+
+paste0 does the same, except it's separator is "".
+paste0 is equivalent to str_c with collapse set to ""
+
+2. In your own words, describe the difference between the sep and collapse arguments to str_c().
+
+How sep and collapse are used by str_c if collapse is not NULL:
+
+  * Each vector is resized to the largest vector length using usual
+    recycling rules.
+  * The separator is placed between each vector.
+  * The collapse value is placed at the end of each row
+  * The string is collapsed row-by-row into a single value.
+    Each row, after it is printed, receives a space as a separator.
+
+If collapse is NULL, each row becomes a string in a vector.
+If collapse is not NULL, the output is a single character string.
+```{r}
+str_c(c("x", "y", "z"), c("a", "b", "c"), sep = ', ', collapse = "v ")
+# x  , a  v
+# y  , b  v
+# z  , c
+
+str_c(c("x", "y", "z"), c("a", "b", "c"), collapse = "v ")
+# x  a  v
+# y  b  v
+# z  c
+
+str_c(c("x", "y", "z"), c("a", "b", "c"), sep = ", ")
+# x  , a
+# y  , b
+# z  , c
+
+length(str_c(c("x", "y", "z"), c("a", "b", "c"), sep = ", "))
+``` 
+From this we can say that sep separates column values, and 
+collapse separates row values. collapse also specifies that we want
+a single string as output.
+
+3. Use str_length() and str_sub() to extract the middle character from a string. What will you do if the string has an even number of characters?
+
+I'm going to pick the length %/% 2 as the middle character for an
+even-length string, and length %/% 2 + 1 as the middle character for
+an odd-length string:
+```{r}
+x <- c("that", "toothpick")
+len = str_length(x)
+mid <- ifelse(len %% 2 == 0, len %/% 2, len %/% 2 + 1)
+str_sub(x, mid, mid)
+```
+
+4. What does str_wrap() do? When might you want to use it?
+
+str_wrap allows you to indent/exdent a list of paragraphs given as
+strings in a vector. You can use it to write a document without 
+indentation and update it to whichever form you choose:
+
+  * first line indented by given number of characters in all paragraphs
+  * all but first line indented by given number of chars in all paras
+
+```{r}
+thanks_path <- file.path(R.home("doc"), "THANKS")
+thanks <- str_c(readLines(thanks_path), collapse = "\n")
+thanks <- word(thanks, 1, 3, fixed("\n\n"))
+cat(str_wrap(thanks, 
+             width = 40, # target line width in characters
+             # indent = 4, # indent the starting paragraph line by chars
+             exdent = 4),# indent all but first line by chars
+    "\n")
+```
+
+5. What does str_trim() do? What’s the opposite of str_trim()?
+
+str_trim: removes whitespace from start and end of string.
+          str_trim(string, side = "both" | "left" | "right")
+str_squish: remove repeated whitespace within string
+            str_squish(string)
+str_pad: add whitespace to beginning/end/both sides of string
+         str_pad(string, width, side = "both" | "left" | "right")
+         
+6. Write a function that turns (e.g.) a vector c("a", "b", "c") into the string a, b, and c. Think carefully about what it should do if given a vector of length 0, 1, or 2.
+
+```{r}
+combine <- function(v) {
+  case_when(
+    (length(v) == 0) ~ "",
+    (length(v) == 1) ~ v[1],
+    (length(v) == 2) ~ str_c(v, collapse = " and "),
+    TRUE ~ {
+      part <- str_c(v[1 : length(v) - 1], collapse = ", ")
+      str_c(c(part, v[length(v)]), collapse = ", and ")
+    }
+  )
+}
+
+combine(c())
+combine(c("1"))
+combine(c("1", "2"))
+combine(c("a", "b", "c"))
+```
+
+## 14.3 Matching patterns with regular expressions
+
+str_view and str_view_all take a character vector and a regular expression
+and show you how they match.
+str_view shows the first match, str_view_all shows all matches.
+
+### 14.3.1 Basic matches
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "an")  # match the letters exactly
+str_view(x, ".a.") # . matches any character
+```
+How do you match the character "."? You escape it using "\.". But since
+we have \ inside the string, to escape it you have to append a \ before
+it, so our regex becomes "\\.". writeLines below shows that this is
+actually "\."
+```{r}
+dot <- "\\."
+writeLines(dot)
+str_view(c("abc", "a.c", "bef"), "a\\.c")
+```
+
+To match "\", we need to use "\\\\" as the regex.
+```{r}
+x <- "a\\b"
+writeLines(x)
+str_view(x, "\\\\")
+```
+Here, regex will be written \. and the regex string will be written "\\."
+
+#### 14.3.1.1 Exercises
+
+1. Explain why each of these strings don’t match a \: "\", "\\", "\\\".
+
+To match, you need "\\\\:". Neither of the expressions shown matches \:
+```{r}
+x <- "\\:"
+str_view(x, "\\\\:")
+```
+
+2. How would you match the sequence "'\?
+
+```{r}
+x <- "\"'\\"
+writeLines(x)
+str_view(x, "\"\'\\\\")
+```
+
+3. What patterns will the regular expression \..\..\.. match? How would you represent it as a string?
+
+It will match a . followed by any character followed by another .
+followed by any character followed by another . and any character.
+It can be represented as: "\\..\\..\\.."
+```{r}
+x <- ".a.b.c"
+str_view(x, "\\..\\..\\..")
+```
+
+### 14.3.2 Anchors
+
+
+  * ^ to match the start of the string.
+  * $ to match the end of the string.
+
