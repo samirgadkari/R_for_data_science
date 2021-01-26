@@ -329,4 +329,95 @@ str_view(x, "\\..\\..\\..")
 
   * ^ to match the start of the string.
   * $ to match the end of the string.
+  * To force a regex to match the complete string, use both ^ and $
+  * Mnemonic to remember these: If you start with power (^),
+    you will end up with money ($).
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "^a")
+str_view(x, "a$")
+```
+```{r}
+x <- c("apple pie", "apple", "apple cake")
+str_view(x, "apple")
+str_view(x, "^apple$")
+```
+You can also match the boundary between words with \b. This is not
+usually used, but you can use it when finding functions in RStudio help.
+ex. \bsum\b will match sum and not summarise.
+
+#### 14.3.2.1 Exercises
+
+1. How would you match the literal string "$^$"?
+```{r}
+x <- "$^$"
+str_view(x, "\\$\\^\\$")
+```
+2. Given the corpus of common words in stringr::words, create regular expressions that find all words that:
+
+  1. Start with “y”.
+```{r}
+str_view(stringr::words, "^y", match = TRUE)
+```
+  
+  2. End with “x”
+```{r}
+str_view(stringr::words, "x$", match = TRUE)
+```
+  
+  3. Are exactly three letters long. (Don’t cheat by using str_length()!)
+```{r}
+str_view(stringr::words, "^...$", match = TRUE)
+```
+  
+  4. Have seven letters or more.
+```{r}
+str_view(stringr::words, "........*", match = TRUE)
+str_view(stringr::words, ".{7,}", match = TRUE)
+```
+### 14.3.3 Character classes and alternatives
+
+  * \d: matches any digit.
+  * \s: matches any whitespace (e.g. space, tab, newline).
+  * [abc]: matches a, b, or c.
+  * [^abc]: matches anything except a, b, or c.
+
+```{r}
+str_view(c("abc", "a.c", "a*c", "a c"), "a[.]c")
+str_view(c("abc", "a.c", "a*c", "a c"), ".[*]c")
+str_view(c("abc", "a.c", "a*c", "a c"), "a[ ]")
+```
+Inside a character class, ] \ ^ - have special meaning, and
+have to be preceded by a \
+
+Alternation:
+```{r}
+str_view(c("grey", "gray"), "gr(e|a)y")
+```
+#### 14.3.3.1 Exercises
+
+
+1. Create regular expressions to find all words that:
+
+  1. Start with a vowel.
+```{r}
+str_view(stringr::words, "^[aeiou]", match = TRUE)
+```
+  
+  2. That only contain consonants. (Hint: thinking about matching “not”-vowels.)
+```{r}
+str_view(stringr::words, "^[^aeiou]*$", match = TRUE)
+```
+  
+  3. End with ed, but not with eed.
+```{r}
+str_view(stringr::words, "[^e]ed$", match = TRUE)
+```
+  
+  4. End with ing or ise.
+```{r}
+str_view(stringr::words, "(ing|ise)$", match = TRUE)
+```
+
 
