@@ -7,6 +7,7 @@ output: html_document
 
 ```{r}
 library(tidyverse)
+library(stringi)
 
 read_path = Sys.getenv('DATASETS')
 write_path = paste(read_path, 'output', sep = '/')
@@ -968,6 +969,234 @@ x %>%
 1. Split up a string like "apples, pears, and bananas" into individual components.
 ```{r}
 x <- "apples, pears, and bananas"
-str_split(x, ",\\s|and\\s") # why is there an extra "" in the result?
+str_split(x, boundary("word"))
+```
+
+2. Why is it better to split up by boundary("word") than " "?
+
+A word boundary includes , . etc. in addition to spaces.
+This allows us to get only the words, instead of puncutation attached
+to words.
+
+3. What does splitting with an empty string ("") do? Experiment, and then read the documentation.
+```{r}
+x <- "apples, pears, and bananas"
+str_split(x, "")
+```
+Splitting with an empty string "" splits string into characters.
+An empty pattern "" is equivalent to boundary("character").
+
+### 14.4.6 Find matches
+
+  * str_locate: gives you the start/end position of first match.
+    Useful when other functions don't help. Use str_locate to find the
+    match, and str_sub to extract it.
+  * str_locate_all: Finds start/end position of each match for the
+    whole string.
+    
+```{r}
+x <- c("apple", "banana", "pear")
+str_locate(x, "a.")
+str_locate_all(x, "a.")
+```
+## 14.5 Other types of patterns
+
+A pattern that is a string is automatically wrapped in a regex call.
+Inside that call, you can specify:
+  
+  * All regex parameters are FALSE by default
+  * ignore_case (FALSE by default)
+  * multiline (FALSE by default: ^ and $ match string beginning and end).
+    If TRUE: $ and ^ match line beginning and end.
+  * dotall (FALSE by default: makes . not match \n).
+    If TRUE: makes . match \n so you can match across lines.
+  * comments (FALSE by default: you cannot put in comments for the regex)
+    If TRUE: you can put in comments inside regex quotes
+
+```{r}
+str_view(fruit, "nana", match = TRUE)
+# this becomes
+str_view(fruit, regex("nana"), match = TRUE)
+```
+You can specify flags to regex parser using regex function.
+For example, by default ignore_case is TRUE
+```{r}
+bananas <- c("banana", "Banana", "BANANA")
+str_view(bananas, regex("nana"))  # ignore_case = FALSE by default
+str_view(bananas, regex("nana", ignore_case = TRUE))
+```
+By default, multiline = FALSE: matches ^ and $ to the full string.
+With multiline = TRUE: matches ^ and $ to each line, not the full string.
+
+```{r}
+x <- "Line 1\nLine 2\nLine 3"
+str_extract_all(x, "^Line")[[1]]
+str_extract_all(x, regex("^Line", multiline = TRUE))[[1]]
+```
+
+comments (FALSE by default: you cannot put in comments for the regex).
+If TRUE: you can put in comments inside regex quotes.
+Comments are as usual in R, preceded by a #
+```{r}
+phone <- regex("
+  \\(?     # optional opening parens
+  (\\d{3}) # area code
+  [) -]?   # optional closing parens, space, or dash
+  (\\d{3}) # another three numbers
+  [ -]?    # optional space or dash
+  (\\d{3}) # three more numbers
+  ", comments = TRUE)
+
+str_match("514-791-8141", phone)
+```
+
+dotall (FALSE by default: makes . not match \n).
+If TRUE: makes . match \n so you can match across lines.
+
+Other functions you can use instead of regex:
+
+  * fixed: matches exactly the given sequence of bytes.
+    It ignores all regular expressions, and thus is around 4x faster.
+    There are many ways of defining a letter in languages other than
+    english.
+    Those letters render identically, but are defined differently.
+    So don't use fixed for anything other than english.
+    Use coll for those languages.
+  * coll: compare strings using different collation rules.
+    This is useful for doing case insensitive matching.
+    You can give coll a locale to select the correct rules.
+    coll is just as slow as regex, since language rules are complicated.
+    You cannot give locale to fixed and regex.
+```{r}
+microbenchmark::microbenchmark(
+  fixed = str_detect(sentences, fixed("the")),
+  regex = str_detect(sentences, regex("the")),
+  times = 20
+)
+```
+    
+To find out which locale you're using:
+```{r}
+stringi::stri_locale_info()
+```
+
+You can use boundary function with str_split, str_extract, and str_view.
+
+### 14.5.1 Exercises
+
+1. How would you find all strings containing \ with regex() vs. with fixed()?
+```{r}
+s <- c("\\this", "and", "\\that")
+s[str_detect(s, "\\\\")]
+s[str_detect(s, fixed("\\"))]
+```
+2. What are the five most common words in sentences?
+```{r}
+tibble(word = unlist(str_split(sentences, boundary("word")))) %>%
+  mutate(word = str_to_lower(word)) %>%
+  group_by(word) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(5)
+```
+
+## 14.6 Other uses of regular expressions
+
+Base R useful functions that use regular expressions:
+
+  * apropos: searches all global environment objects
+  * dir: lists all files in a directory
+  
+```{r}
+apropos("replace")
+```
+```{r}
+head(dir(pattern = "\\.Rmd$"))
+```
+
+You can convert globs to regexs using glob2rx function.
+
+## 14.7 stringi
+
+stringr is built on top of stringi. stringr exposes the most useful
+functions. stringi is comprehensive and contains 250 functions to
+stringr's 49.
+
+Take a look at stringi, if you're struggling to do something in stringr.
+With stringi, the function prefix is not str_, it's stri_
+
+### 14.7.1 Exercises
+
+1. Find the stringi functions that:
+
+  1. Count the number of words.
+stri_stats_general: returns these statistics of a character vector:
+
+  * Number of lines
+  * Number of non-empty lines
+  * Number of characters
+  * Number of characters minus whitespace characters
+  
+stri_stats_latex: Used to get statistics of latex character vector.
+You can also use it on any character vector.
+It returns these statistics:
+
+  * Number of word characters
+  * Number of commands and word characters
+  * Latex whitespaces including { and } in some contexts
+  * Number of words
+  * Number of commands
+  * Number of environments
+  
+
+```{r}
+s <- c('Lorem ipsum dolor sit amet, consectetur adipisicing elit.',
+       'nibh augue, suscipit a, scelerisque sed, lacinia in, mi.',
+       'Cras vel lorem. Etiam pellentesque aliquet tellus.',
+       '')
+stri_stats_general(s)
+stri_stats_latex(s)
+```
+  
+  2. Find duplicated strings.
+
+stri_duplicated: Returns a logical vector telling us which strings in a
+character vector are duplicated.
+
+stri_duplicated_any: Tells us if there are any duplicated strings.
+```{r}
+x <- c("a", "b", "a", NA, "a", NA)
+stri_duplicated(x)
+stri_duplicated_any(x)
+```
+
+  3. Generate random text.
+
+stri_rand_strings: Generates random n strings of desired lengths.
+You have to give a length for each string, so you need n lengths to
+generate an n-string vector.
+
+stri_rand_shuffle: Takes a character vector, and returns a vector
+of the same length with characters shuffled in each string
+
+stri_rand_lipsum: Takes the number of paragraphs to generate and
+generates the Lorem Ipsum paragraphs.
+
+```{r}
+stri_rand_strings(4, c(1, 2, 4, 8))
+```
+
+```{r}
+stri_rand_shuffle(c('okla', 'homa'))
+```
+```{r}
+stri_rand_lipsum(2)
+```
+
+2. How do you control the language that stri_sort() uses for sorting?
+
+You give it a locale = "" string.
+```{r}
+stri_sort(c("this", "is", "a", "test"), locale = "en")
 ```
 
