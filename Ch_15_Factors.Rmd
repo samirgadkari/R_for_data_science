@@ -1,0 +1,171 @@
+---
+title: "Ch_15_Factors"
+author: "Samir Gadkari"
+date: "1/27/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+
+read_path = Sys.getenv('DATASETS')
+write_path = paste(read_path, 'output', sep = '/')
+working_dir = Sys.getenv('R_WORKING_DIR')
+
+full_read_path <- function(filename) {
+  paste(read_path, filename, sep = '/')
+}
+
+full_write_path <- function(filename) {
+  paste(write_path, filename, sep = '/')
+}
+
+full_wd_path <- function(filename) {
+  paste(working_dir, filename, sep = '/')
+}
+```
+
+We will use the forcats (anagram of factors) package in tidyverse
+to work with factors.
+
+Factors are useful when:
+
+  * working with categorical variables
+  * when you have to display character vectors in a non-alphabetical order
+  
+## 15.2 Creating factors
+
+If you used character vectors to list the months of the year,
+you must spell each month the same way each time. If you have spelling
+mistakes, you will get different results.
+Also, you can't sort characters vectors Jan through Dec !
+
+Let's create a factor:
+```{r}
+x1 <- c("Dec", "Apr", "Jan", "Mar")
+month_levels <- c(
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
+y1 <- factor(x1, levels = month_levels)
+y1
+sort(y1)
+```
+Any values not in the set will be silently converted to NA:
+```{r}
+x2 <- c("Dec", "Apr", "Jam", "Mar")
+y2 <- factor(x2, levels = month_levels)
+y2
+```
+To get a warning, use readr::parse_factor. This is really useful when
+testing your variables for unusual data.
+```{r}
+y2 <- parse_factor(x2, levels = month_levels)
+```
+
+If you omit the levels, they will be taken in alphabetical order from the
+character vector:
+```{r}
+factor(x1)
+```
+
+To set levels according to first-seen levels in the data, you can use
+either:
+
+  * unique(data)
+  * or get default factoring, and then use fct_inorder(data)
+```{r}
+f1 <- factor(x1, levels = unique(x1))
+f1
+f2 <- x1 %>% factor() %>% fct_inorder()
+f2
+```
+levels function gives you the levels of a factor:
+```{r}
+levels(f2)
+```
+
+## General Social Survey
+
+For the rest of this chapter we will use the forcats:gss_cat dataset.
+It is a social survey with a lot of variables. We have only selected
+a few of them. It was created by [NORC]('http://gss.norc.org/').
+The survey was done over the years 2000-2014.
+
+```{r}
+gss_cat
+```
+
+To see the levels of a factor, use count:
+```{r}
+gss_cat %>% count(race)
+```
+or with a bar chart.
+By default, geom_bar will drop counts that are 0.
+Use scale_x_discrete(drop = FALSE) to show all factors, even those with
+0 counts.
+Unfortunately, dplyr doesn't have a drop option, but will have
+in the future.
+```{r}
+ggplot(gss_cat, aes(race)) +
+  geom_bar()
+
+ggplot(gss_cat, aes(race)) +
+  geom_bar() +
+  scale_x_discrete(drop = FALSE)
+```
+
+### 15.3.1 Exercise
+
+1. Explore the distribution of rincome (reported income). What makes the default bar chart hard to understand? How could you improve the plot?
+
+The default bar chart is difficult to read because the values on the x
+axis overlap. Use coord_flip to put them on the y axis.
+```{r}
+ggplot(gss_cat, aes(rincome)) +
+  geom_bar() +
+  coord_flip() # %>%
+  # scale_x_discrete(drop = FALSE)
+```
+
+2. What is the most common relig in this survey? What’s the most common partyid?
+
+```{r}
+gss_cat %>%
+  group_by(relig) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(1) %>%
+  pull(relig)
+
+gss_cat %>%
+  group_by(partyid) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(1) %>%
+  pull(partyid)
+```
+
+3. Which relig does denom (denomination) apply to? How can you find out with a table? How can you find out with a visualisation?
+
+```{r}
+gss_cat %>%
+  select(relig, denom) %>%
+  group_by(relig, denom) %>%
+  summarise(num_denom = n()) %>%
+  pivot_wider(names_from = relig, values_from = num_denom)
+
+gss_cat %>%
+  select(relig, denom) %>%
+  group_by(relig, denom) %>%
+  summarise(num_denom = n()) %>%
+  ggplot(aes(relig, denom)) +
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   vjust = 1.1, 
+                                   hjust = 1.2))
+  
+```
+As you look at the numbers, you can see that most of the denominations
+are for the Protestants.
+
