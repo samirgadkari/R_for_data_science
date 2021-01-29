@@ -1,0 +1,94 @@
+---
+title: "Ch_16_Dates_and_Times"
+author: "Samir Gadkari"
+date: "1/29/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(nycflights13)
+
+read_path = Sys.getenv('DATASETS')
+write_path = paste(read_path, 'output', sep = '/')
+working_dir = Sys.getenv('R_WORKING_DIR')
+
+full_read_path <- function(filename) {
+  paste(read_path, filename, sep = '/')
+}
+
+full_write_path <- function(filename) {
+  paste(write_path, filename, sep = '/')
+}
+
+full_wd_path <- function(filename) {
+  paste(working_dir, filename, sep = '/')
+}
+```
+
+Dates and times seem easy, but as you learn more they get more and
+more complicated. Some of this is because:
+  
+  * many parts of the world use daylight savings time (DST), 
+    so that some days have 23 hours, and others have 25.
+  * some minutes have 61 seconds because every now and then leap seconds
+    are added because the Earth’s rotation is gradually slowing down.
+
+We will use the lubridate package to help with dates and datetimes.
+R does not have a native class for storing times.
+If you want to learn about times, look at the hms package.
+
+## 16.2 Creating dates and times
+
+Tibbles prints dates/times/datetimes differently:
+
+  * dates: printed as <date>
+  * times: printed as <time>
+  * datetime: printed as <dttm>
+    these are called posixct elsewhere in R.
+  
+Always use the simplest type possible. Datetimes are much more complicated
+than dates, because of time zones.
+
+Get the current date or datetime:
+```{r}
+today()
+now()
+```
+
+You can create date/time from:
+
+  * a string
+  * individual date-time components
+  * existing date/time object
+  
+### 16.2.1 From strings
+
+To create dates from strings, give the ymd, mdy, dmy functions a string
+with the correct order of components. These functions also take
+unquoted numbers.
+```{r}
+ymd("2017-01-31")
+mdy("January 31st, 2017")
+dmy("31-Jan-2017")
+
+ymd(20170131)
+mdy(01312017)
+dmy(31012017)
+```
+
+If the string cannot be parsed, an error will be returned.
+
+To create a datetime, to the above function names, add an underscore and
+one or more of "h", "m", "s":
+```{r}
+ymd_hms("2017-01-31 20:11:59")
+mdy_hm("Jan 31 2017 08:01")
+```
+
+Force the creation of a datetime from a date by supplying a timezone:
+```{r}
+ymd("20170131", tz = "UTC")
+```
+
