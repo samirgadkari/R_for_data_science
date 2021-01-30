@@ -45,8 +45,8 @@ Tibbles prints dates/times/datetimes differently:
 
   * dates: printed as <date>
   * times: printed as <time>
-  * datetime: printed as <dttm>
-    these are called posixct elsewhere in R.
+  * datetime: printed as <dttm> (actually, I see this printed as POSIXct).
+    These are called POSIXct elsewhere in R.
   
 Always use the simplest type possible. Datetimes are much more complicated
 than dates, because of time zones.
@@ -91,4 +91,204 @@ Force the creation of a datetime from a date by supplying a timezone:
 ```{r}
 ymd("20170131", tz = "UTC")
 ```
+
+### 16.2.2 Individual components
+
+  * make_datetime(year, month, day, hour, min) to create datetime from
+    individual components
+  * make_date(year, month, day) to create date from individual components
+```{r}
+flights %>%
+  select(year, month, day, hour, minute)
+```
+  
+Notice that year, month, day are integers and hour, minute are doubles.
+```{r}
+flights %>%
+  select(year, month, day, hour, minute) %>%
+  mutate(departure = make_datetime(year, month, day, hour, minute))
+```
+
+Let's do the same for our other time columns where the times are
+in an odd format:
+```{r}
+make_datetime_100 <- function(year, month, day, time) {
+  make_datetime(year, month, day, time %/% 100, time %% 100)
+}
+
+flights_dt <- flights %>%
+  filter(!is.na(dep_time), !is.na(arr_time)) %>%
+  mutate(
+    dep_time = make_datetime_100(year, month, day, dep_time),
+    arr_time = make_datetime_100(year, month, day, arr_time),
+    sched_dep_time = make_datetime_100(year, month, day, sched_dep_time),
+    sched_arr_time = make_datetime_100(year, month, day, sched_arr_time)
+  ) %>%
+  select(origin, dest, ends_with("delay"), ends_with("time"))
+
+flights_dt
+```
+
+Let's see the number of departures for the whole year.
+Since datetimes have  a resolution of 1 second, binwidth is
+given in seconds.
+
+```{r}
+flights_dt %>%
+  ggplot(aes(dep_time)) +
+  geom_freqpoly(binwidth = 86400) # 86400 seconds = 1 day
+```
+Or within a single day:
+```{r}
+flights_dt %>%
+  filter(dep_time < ymd(20130102)) %>%
+  ggplot(aes(dep_time)) +
+  geom_freqpoly(binwidth = 600) # 600 seconds = 10 minutes
+```
+
+### 16.2.3 From other types
+
+  * as_datetime: converts date to datetime.
+    If the numeric offset from unix epoch (1970-01-01) is given
+    in seconds, it can also convert it to datetime.
+  * as_date:     converts datetime to date
+    If the numeric offset from unix epoch (1970-01-01) is given
+    in days, it can also convert it to date
+  
+```{r}
+as_datetime(today())
+as_date(now())
+```
+  
+```{r}
+as_datetime(60 * 60 * 60)
+as_date(365 * 10 + 2)
+```
+
+## 16.2.4 Exercises
+
+1. What happens if you parse a string that contains invalid dates?
+```{r}
+ymd(c("2010-10-10", "bananas"))
+```
+You get an error message "failed to parse" along with an NA value
+for the element that could not be parsed.
+
+2. What does the tzone argument to today() do? Why is it important?
+
+The tzone argument is a character specifying which time zone you would
+like the current time in. It defaults to your computer's system timezone.
+It is important because it provides a frame of reference for time
+comparisons. You can compare times in the same time zones easily.
+You can compare times in different time zones if you know the offset
+of the time zones.
+
+3. Use the appropriate lubridate function to parse each of the following dates:
+```{r}
+d1 <- "January 1, 2010"
+mdy(d1)
+
+d2 <- "2015-Mar-07"
+ymd(d2)
+
+d3 <- "06-Jun-2017"
+dmy(d3)
+
+d4 <- c("August 19 (2015)", "July 1 (2015)")
+mdy(d4)
+
+d5 <- "12/30/14" # Dec 30, 2014
+mdy(d5)
+```
+
+## 16.3 Date-time components
+
+Now that we can get datetime into R's datetime data structures,
+let's see how we can access parts of that structure
+
+### 16.3.1 Getting components
+
+All of these functions can be used to extract parts of a datetime
+structure. They all return a number by default:
+
+  * year
+  * month: set label = TRUE to return the abbreviated name of the month.
+    Set label = TRUE & abbr = FALSE to return the full name of the month.
+  * mday:  get the day of the month from structure
+  * yday:  get the day of the year from structure
+  * wday:  get the day of the week from structure.
+    Set label = TRUE to return the abbreviated name of the weekday.
+    Set label = TRUE & abbr = FALSE to return the full name of the weekday
+  * hour
+  * minute
+  * second
+  
+```{r}
+datetime <- ymd_hms("2016-07-08 12:34:56")
+year(datetime)
+month(datetime)
+mday(datetime)
+yday(datetime)
+wday(datetime)
+```
+```{r}
+month(datetime)
+month(datetime, label = TRUE)
+month(datetime, label = TRUE, abbr = FALSE)
+```
+
+```{r}
+wday(datetime)
+wday(datetime, label = TRUE)
+wday(datetime, label = TRUE, abbr = FALSE)
+```
+
+We can use wday to see more flights depart during the week than on the
+weekend:
+```{r}
+flights_dt %>%
+  mutate(day = wday(dep_time, label = TRUE, abbr = FALSE)) %>%
+  ggplot(aes(day)) +
+  geom_bar()  # same as geom_histogram(stat = "count")
+```
+
+There's an interesting pattern if we look at average departure delay
+for minute within the hour:
+```{r}
+flights_dt %>%
+  mutate(minute = minute(dep_time)) %>%
+  group_by(minute) %>%
+  summarise(
+    avg_delay = mean(dep_delay, na.rm = TRUE),
+    n = n()) %>%
+  ggplot(aes(minute, avg_delay)) +
+  geom_line()
+```
+The average delay seems to be less from 20 to 30 minutes,
+and from 50 to 60 minutes.
+
+If we look at the scheduled departure time, there is no such pattern:
+```{r}
+sched_dep <- flights_dt %>%
+  mutate(minute = minute(sched_dep_time)) %>%
+  group_by(minute) %>%
+  summarise(
+    avg_delay = mean(dep_delay, na.rm = TRUE),
+    n = n())
+
+sched_dep %>%
+  ggplot(aes(minute, avg_delay)) +
+  geom_line()
+```
+
+So why is there such a pattern with actual departure times?
+When humans are involved, there is a strong bias for flights leaving
+at "nice" departure times. Always be aware of bias among humans.
+```{r}
+sched_dep %>%
+  ggplot(aes(minute, n)) +
+  geom_line()
+```
+
+### 16.3.2 Rounding
 
