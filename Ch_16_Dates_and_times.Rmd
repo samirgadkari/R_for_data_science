@@ -702,3 +702,63 @@ leap_date <- ymd("2016-01-01")
 (leap_date %--% (leap_date + years(1))) / months(1)
 ```
 
+## 16.5 Time zones
+
+Instead of using EST (Eastern Standard Time) etc., R uses IANA string
+codes for time zones. EST is used in Australia as well, so it's best
+to avoid EST-type time zones. Examples of IANA strings are
+“America/New_York”, “Europe/Paris”, and “Pacific/Auckland”.
+
+The reason city names are also used is because countries break apart,
+or change names, but city names usually don't change.
+
+To find out your current timezone, use Sys.timezone():
+```{r}
+Sys.timezone()
+```
+
+To see the complete list of timezones, use OlsonNames():
+```{r}
+length(OlsonNames())
+head(OlsonNames())
+```
+
+In R, timezones are only used for display purposes. These 3 objects
+represent the same instant in time:
+```{r}
+(x1 <- ymd_hms("2015-06-01 12:00:00", tz = "America/New_York"))
+(x2 <- ymd_hms("2015-06-01 18:00:00", tz = "Europe/Copenhagen"))
+(x3 <- ymd_hms("2015-06-02 04:00:00", tz = "Pacific/Auckland"))
+x1 - x2
+x1 - x3
+```
+
+Unless specified, lubridate uses UTC (Coordinated Universal Time) which
+is used by the scientific community. Operations the combine datetimes
+like c, will often drop the timezones. In that case, the date-times will
+display in your local timezones:
+```{r}
+x4 <- c(x1, x2, x3)
+x4
+```
+
+You can change the timezone in two ways:
+
+  * when the instant in time is correct, but you want a more natural
+    display, use with_tz with a timezone specification. This keeps the
+    instant in time the same, but changes it's display.
+  * To change the instant to a different timezone, use force_tz
+    
+```{r}
+x4a <- with_tz(x4, tzone = "Australia/Lord_Howe")
+x4a
+x4a - x4
+```
+This also shows that timezones are not integer hour offsets (look at the
+1030 above).
+
+```{r}
+x4b <- force_tz(x4, tzone = "Australia/Lord_Howe")
+x4b
+x4b - x4
+```
