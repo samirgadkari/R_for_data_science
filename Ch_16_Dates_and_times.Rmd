@@ -505,3 +505,200 @@ taking off early.
 
 ### 16.4.1 Durations
 
+Durations represent an exact number of seconds.
+```{r}
+# How old is Hadley
+(h_age <- today() - ymd(19791014))
+```
+The difftime class specifies duration in hours, minutes, seconds,
+days or weeks.
+This makes it difficult to work with. So lubridate provides durations
+in seconds. When you print duration, it shows the seconds and also 
+shows the largest human-readable sensible value 
+(if the value < 1 week, show it in days, etc.). These conversions are
+done based on the standard values of:
+    
+  * 1 minute = 60 seconds,
+  * 1 hour = 60 minutes,
+  * 1 day = 24 hours,
+  * 1 week = 7 days,
+  * 1 year = 365 days
+
+```{r}
+as.duration(h_age)
+```
+To construct durations:
+```{r}
+dseconds(15)
+dminutes(10)
+dhours(c(12, 24))
+ddays(0:5)
+dweeks(3)
+dyears(1)
+```
+
+You can add and multiply durations.
+```{r}
+2 * dyears(1)
+dyears(1) + dweeks(12) + dhours(15)
+```
+
+You can add/subtract durations to/from days:
+```{r}
+tomorrow <- today() + ddays(1)
+last_year <- today() - dyears(1)
+```
+Since durations represent an exact number of seconds, you may get an
+unexpected result. In this case, March 12 has 23 hours because of DST.
+Also notice that the time zones have changed. This is why lubridate
+provides periods which solves this issue.
+```{r}
+(one_pm <- ymd_hms("2016-03-12 13:00:00", tz = "America/New_York"))
+one_pm + ddays(1)
+```
+
+### 16.4.2 Periods
+
+Periods solve the issue that durations have with daylight savings time.
+Periods don't work in seconds, but instead in days/months, etc. This makes
+them intuitive to work with. Their resolution does extend to seconds.
+
+Periods are different in that their value is realized only when they're
+combined with a date/datetime. This makes them context-sensitive.
+```{r}
+one_pm
+one_pm + days(1)
+```
+Because periods are context-sensitive, the addition of 1 day to one_pm
+works as predicted. To create periods:
+```{r}
+seconds(15)
+minutes(10)
+hours(c(12, 24))
+days(7)
+months(1:6)
+weeks(3)
+years(1)
+```
+
+You can add and multiply periods:
+```{r}
+10 * (months(6) + days(1))
+days(50) + hours(25) + minutes(2)
+```
+and add them to dates. Here we see how it handles leap years, and
+daylight savings time:
+```{r}
+ymd("2016-01-01") + dyears(1)
+ymd("2016-01-01") + years(1)
+
+one_pm + ddays(1)
+one_pm + days(1)
+```
+
+Some planes in the flights dataset seem to arrive at their destination
+before they left New York city:
+```{r}
+flights_dt %>%
+  filter(arr_time < dep_time)
+```
+These are overnight flights. We used the same date for departure and
+arrival, but these flights arrived on the following day. We can fix this:
+```{r}
+flights_dt <- flights_dt %>%
+  mutate(
+    overnight = arr_time < dep_time,
+    arr_time = arr_time + days(overnight * 1),
+    sched_arr_time = sched_arr_time + days(overnight * 1)
+  )
+
+flights_dt %>%
+  filter(overnight, arr_time < dep_time)
+```
+
+### 16.4.3 Intervals
+
+What should years(1)/days(1) return? It depends which year it is.
+For 2015 it should be 365, but for 2016 it should be 366.
+```{r}
+years(1) / days(1)
+```
+Since lubridate cannot tell which year, it averages based on leap year
+occurring every 4 years. Take such proportional numbers as a warning,
+that lubridate cannot tell you the exact answer yet.
+
+To get a more accurate answer, use an interval. An interval has a starting
+and ending points. This makes it easy to answer the question. The %--%
+denotes the interval.
+```{r}
+next_year <- today() + years(1)
+(today() %--% next_year) / ddays(1)
+```
+
+How many periods fall into an interval? Use integer division.
+```{r}
+(today() %--% next_year) %/% days(1)
+```
+
+### 16.4.4 Summary
+
+Always pick the simplest data structure that solves your problem.
+
+  * use duration if you only care about physical time
+  * use period if you care about human time
+  * use intervals if you want to figure out spans in human units
+
+![Allowed arithmetic operations](images/allowed_arithmetic_operations.png)
+
+### 16.4.5 Exercises
+
+1. Why is there months() but no dmonths()?
+
+months gives the human-level month period. The actual value is determined
+when it is applied to a date.
+
+dmonths would have given the duration, but there are different durations
+for months (29 days in Feb, 30 days in Nov, 31 days in Dec, etc.).
+So it doesn't make sense to have a duration of a month
+
+2. Explain days(overnight * 1) to someone who has just started learning R. How does it work?
+
+overnight is a logical variable. A value of TRUE when multiplied by a
+number (1) is converted into the number 1. If the logical value was FALSE,
+it would be converted into the number 0.
+
+3. Create a vector of dates giving the first day of every month in 2015. Create a vector of dates giving the first day of every month in the current year.
+```{r}
+make_start_of_month_dates <- function(year) {
+  result <- Date(12)
+  for (month in 1L : 12L) {
+    result[month] = make_date(year = year, month = month, day = 1L)
+  }
+  result
+}
+
+(month_dates_2015 = make_start_of_month_dates(2015))
+
+this_year = today() %>% str_extract("^(\\d{4})") %>% as.integer()
+(month_dates_this_year = make_start_of_month_dates(this_year))
+```
+
+4. Write a function that given your birthday (as a date), returns how old you are in years.
+```{r}
+how_old <- function(birthday) {
+  (today() - birthday) / ddays(365)
+}
+
+how_old(ymd("1966-01-09"))
+```
+
+5. Why can’t (today() %--% (today() + years(1))) / months(1) work?
+
+I think it does work - even if it is a leap year
+```{r}
+((today() %--% (today() + years(1))) / months(1))
+
+leap_date <- ymd("2016-01-01")
+(leap_date %--% (leap_date + years(1))) / months(1)
+```
+
