@@ -1,0 +1,144 @@
+---
+title: "Ch_18_pipes"
+author: "Samir Gadkari"
+date: "2/2/2021"
+output: html_document
+---
+
+Pipes (%>%, etc.) come with the magrittr package which is a part of
+tidyverse. We will see how it works by exploring just the magrittr package,
+instead of the entire tidyverse.
+
+```{r}
+library(magrittr)
+```
+
+## 18.2 Piping alternatives
+
+Suppose you had to code the little bunny song:
+
+    Little bunny Foo Foo
+    Went hopping through the forest
+    Scooping up the field mice
+    And bopping them on the head
+
+You could:
+
+  1. Create a function for each step, saving the output and giving it
+     to the next function.
+     
+    1.1 This requires a lot of names to be assigned to the intermediate
+        variables.
+
+    1.2 You may make a mistake and pass the wrong variable to the next
+        function
+
+  2. Create a function for each step, replacing the input with the output
+     at each step, and passing the output to the next function
+     
+    2.1 If you had to debug your code, you would have to re-create the
+        original variable again (since it has been replaced with 
+        different values)
+         
+  3. Compose functions
+  
+    3.1 Since the inner function is used first, you have to read your code
+        from the inside-out
+
+  4. Use pipes
+  
+    4.1 Pipes take the computation on the left and pass it as input to
+        the right. For the bunny exercise, magrittr creates something
+        like this:
+
+    my_pipe <- function(.) {
+      . <- hop(., through = forest)
+      . <- scoop(., up = field_mice)
+      , <- bop(., on = head)
+    }
+    
+    my_pipe(foo_foo)
+
+        
+    4.2 Pipes cannot be used with functions that use the 
+        current environment.
+```{r}
+assign("x", 10)
+x
+"x" %>% assign(100)
+x
+```
+This doesn't work because pipes assign the output of "x" %>% to a temporary
+variable. Although this variable is changed to 100, the function pipe
+has created to handle piping does not return the updated value out.
+Instead, explicitly use an environment:
+```{r}
+env <- environment()
+"x" %>% assign(100, envir = env)
+x
+```
+
+Other functions with this problem: get() and load()
+
+    4.3 The pipe computes each section in turn, passing the value forward.
+        This is why functions that use lazy eval cannot be used with pipes.
+
+One example is tryCatch:
+```{r}
+tryCatch(stop("!"), error = function(e) "An error")
+
+# stop("!") %>%
+#   tryCatch(error = function(e) "An error")
+# Returns "Error in eval(lhs, parent, parent) : !
+```
+
+There are a relatively wide class of functions with this behavior, ex.
+try, suppressMessages, suppressWarnings.
+
+## 18.3 When not to use pipe
+
+  * If your pipes are more than, say 10 steps long. Instead, use
+    intermediate variables that increase understanding of the code.
+  * If you have multiple inputs or outputs
+  * Your code will be a directed graph with a complex dependency structure
+  
+## 18.4 Other tools from magrittr
+
+  * Sometimes, you want to print out a value computed within the pipe (or
+    plot it, or save it to disk). You can put your plot function within
+    the pipe structure, prepending it with a %T>% (Tee). This tells 
+    magrittr to plot the graph, but not propagate the output of plot. 
+    Instead, propagate the output of the code before the %T>%:
+```{r}
+rnorm(100) %>%
+  matrix(ncol = 2) %>%
+  plot() %>%  # You will see this plot.
+  str()       # Output of the str functions is NULL
+
+# Instead, do:
+rnorm(100) %>%
+  matrix(ncol = 2) %T>% # Propagates output of matrix ...
+  plot() %>%
+  str()                 # ... to the input of str.
+```
+    
+  * When you want to apply a function to variables, instead of the whole
+    dataframe, use %$%. It "explodes" the dataframe into variables:
+```{r}
+mtcars %$%
+  cor(disp, mpg)
+```
+    
+  * For assignment, you can use %<>%.
+Instead of
+```{r}
+mtcars <- mtcars %>%
+  transform(cyl = cyl * 2)
+```
+
+do:
+```{r}
+mtcars %<>% transform(cyl = cyl * 2)
+```
+
+Still, the earlier approach is better because it is more explicit.
