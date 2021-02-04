@@ -1,0 +1,94 @@
+---
+title: "Ch_20_vectors"
+author: "Samir Gadkari"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+## 20.2 Vector basics
+
+Two types of vectors:
+
+  * atomic: contain homogeneous types.
+    ex. logical, integer, double, character, complex, raw.
+    Integer and double vectors are together known as 
+    numeric vectors.
+  * lists: contain heterogeneous types.
+    Also called as recursive vectors, since lists can contain lists.
+    
+NULL represents abscense of a vector.
+NA represents abscence of a value.
+
+Every vector has 2 properties:
+
+  * type: typeof returns the type of the value in the vector.
+    This is why c("this", "that") is called a character vector,
+    cause the values are characters.
+  * length: length returns the length
+  
+Vectors can also contain additional metadata. This helps in
+creating augmented vectors. There are 3 types:
+
+  * Factors are built on top of integer vectors
+  * Dates and date-times are built on top of numeric vectors
+  * Data frames and tibbles are built on top of lists
+  
+## 20.3 Important types of atomic vectors
+
+  * Logical:
+    Only values are TRUE, FALSE, NA. They're constructed by:
+    
+    + comparison operators: 1:10 % 3 == 0
+    + directly: c(TRUE, FALSE, NA)
+    
+  * Integer:
+    By default, specifying a number causes it to become a double.
+    Use the L suffix on the number to make it an integer.
+    
+    + 10 becomes the double value 10
+    + 10L becomes the integer value 10
+    
+    Integers have one special value: NA
+    
+  * Double:
+    Doubles are approximations. To compare two doubles, use
+    dplyr::near. ex:
+```{r}
+    x <- sqrt(2) ^ 2
+    x
+    x - 2
+```
+    Doubles have 4 special values. This is how to detect each:
+    
+    + NA:   is.na
+    + NaN:  is.nan detects both NA and NaN
+    +/-Inf: is.infinite
+    
+    To detect a normal number: is.finite
+    
+```{r}
+    c(-1, 0, 1) / 0
+```
+    
+  * Character:
+    Character vectors are the most complicated since each value
+    can be a string of any length.
+    R uses a global string pool - each string in R is only stored
+    once, and referenced multiple times.
+```{r}
+x <- "this is a long string"
+pryr::object_size(x)
+
+y <- rep(x, 1000)
+pryr::object_size(y)
+```
+
+The output size of the 1000-length repeated string is now
+136 B + (1000 pointers) * (8 B / pointer) ~ 8.13 KB. It's not
+136 * 1000 = 136 KB.
+
+### 20.3.4 Missing values
+
