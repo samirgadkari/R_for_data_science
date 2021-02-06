@@ -6,10 +6,13 @@ output: html_document
 ---
 
 ```{css, echo = FALSE}
-  body {
-    background-color: black;
-    filter: invert(1);
-  }
+body {
+  background-color: black;
+  filter: invert(1);
+}
+table {
+  empty-cells: hide;
+}
 ```
 
 ```{r}
@@ -309,3 +312,171 @@ mean(is.na(x)): Proportion of NAs in x
 sum(!is.finite(x)): Number of Inf, -Inf or NA in x
 
 2. Carefully read the documentation of is.vector(). What does it actually test for? Why does is.atomic() not agree with the definition of atomic vectors above?
+
+is.vector returns TRUE if the first argument is a type of vector
+of the given mode. Modes are:
+
+||||||
+|--|--|--|--|--|
+| logical | integer | double | complex | character |
+| raw     | list    | NULL   | closure (function) | special |
+| builtin | environment | S4 | symbol | pairlist  |
+| promise | language   | char     |  ...   | any |
+| expression | externalptr | bytecode  |  weakref  |           |
+
+Note: Factors are not vectors.
+
+You can also use mode = "any" to check if the vector is of any
+of these modes.
+
+is.atomic returns TRUE only for a small subset of the above types.
+This is why is.vector does not agree with is.atomic for
+all vector types.
+
+3. Compare and contrast setNames() with purrr::set_names().
+
+setNames takes in an object and a vector of names of the same
+length as the object. It returns an object where the names for
+each element of the vector are set.
+
+purrr::set_names takes in an object and:
+
+  * a vector of names of the same length as the object. It returns
+    a vector with each element named
+  * a formula to convert existing names to new names
+  * a function to call to convert existing names to new names.
+    Any values after the function call are passed to the function
+    using the ... variable.
+    
+4. Create functions that take a vector as input and returns:
+
+  1. The last value. Should you use [ or [[?
+  
+You should use [[ since it only extracts a single element.
+[ is used to extract a vector of the selected elements.
+
+```{r}
+last_value <- function(x) {
+  x[[length(x)]]
+}
+
+x <- c("this", "is", "a", "word")
+last_value(x)
+```
+  
+  2. The elements at even numbered positions.
+```{r}
+even_pos_values <- function(x) {
+  even_pos <- seq(2, length(x), by = 2)
+  x[even_pos]
+}
+
+even_pos_values(x)
+```
+  
+  3. Every element except the last value.
+```{r}
+all_but_last <- function(x) {
+  x[-length(x)]
+}
+
+all_but_last(x)
+```
+  
+  4. Only even numbers (and no missing values).
+```{r}
+even_pos_no_missing_values <- function(x) {
+  y <- even_pos_values(x)
+  y[!is.na(y)]
+}
+
+x <- c("this", NA, NA, "is")
+even_pos_no_missing_values(x)
+```
+
+
+5. Why is x[-which(x > 0)] not the same as x[x <= 0]?
+
+These two expressions are the same. Consider:
+
+x > 0: returns a logical vector with TRUE when x > 0, else FALSE.
+which: returns indices of the TRUE values
+-: returns all values except those specified
+
+x[-which(x > 0)]: returns values where x <= 0
+Example:
+```{r}
+x <- c(-2, 5, 8, 9, 20, -1)
+x[-which(x > 0)]
+typeof(x[-which(x > 0)])
+x[x <= 0]
+typeof(x[x <= 0])
+```
+
+6. What happens when you subset with a positive integer that’s bigger than the length of the vector? What happens when you subset with a name that doesn’t exist?
+
+```{r}
+x <- c(1, 2, 3, 4, 5, 6)
+x[7]
+
+x <- c(a = 1, b = 2, c = 3)
+x["a"]
+x[c("a")]
+x["d"]
+x[c("d")]
+```
+A value of NA is returned when you:
+
+  * subset with an index larger than the length of the vector.
+  * subset with a name that doesn't exist
+
+## 20.5 Recursive vectors (lists)
+
+  * Lists can contain other lists. They're good for 
+    representing a hierarchy. Create a list with the list function.
+  * Lists can contain a mix of objects of differing types
+  * Lists can also contain other lists.
+  
+```{r}
+x <- list(1, 2, 3)
+x
+str(x) # Gives the structure of a list. Very good function to use
+       # with lists.
+```
+
+```{r}
+x_named <- list(a = 1, b = 2, c = 3)
+str(x_named)
+```
+
+```{r}
+y <- list("a", 1L, 1.5, TRUE)
+str(y)
+```
+
+```{r}
+z <- list(list(1, 2), list(3, 4))
+str(z)
+z <- list(1:2, 3:4)
+str(z)
+```
+
+## 20.5.1 Visualizing lists
+
+![](images/list_representation.png)
+
+There are three principles:
+
+  1. Lists have rounded corners. Atomic vectors have 
+     square corners.
+  2. Children are drawn inside their parent, and have a 
+     slightly darker background to make it easier to see
+     the hierarchy.
+  3. The orientation of the children (i.e. rows or columns) 
+     isn’t important, so I’ll pick a row or column orientation 
+     to either save space or illustrate an important property 
+     in the example.
+
+### 20.5.2 Subsetting
+
+
