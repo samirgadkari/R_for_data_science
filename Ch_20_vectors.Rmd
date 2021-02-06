@@ -5,6 +5,13 @@ date: "2/4/2021"
 output: html_document
 ---
 
+```{css, echo = FALSE}
+  body {
+    background-color: black;
+    filter: invert(1);
+  }
+```
+
 ```{r}
 library(tidyverse)
 ```
@@ -65,9 +72,10 @@ creating augmented vectors. There are 3 types:
     
     + NA:   is.na
     + NaN:  is.nan detects both NA and NaN
-    +/-Inf: is.infinite
+    +/-Inf: is.infinite. +/-Inf applies to doubles only, 
+            not to integers
     
-    To detect a normal number: is.finite
+    To detect a normal number: is.finite (not infinite or missing).
     
 ```{r}
     c(-1, 0, 1) / 0
@@ -92,3 +100,212 @@ The output size of the 1000-length repeated string is now
 
 ### 20.3.4 Missing values
 
+Each type of atomic vector has it's own missing value:
+
+  * NA: logical, but will be converted using coercion to one of
+        the other NA_... types. So you can just use NA everywhere.
+        Some functions are strict, so you may need to use one of
+        the NA_... types to pass to it.
+  * NA_integer_
+  * NA_real_
+  * NA_character_
+
+### 20.3.5 Exercises
+
+1. Describe the difference between is.finite(x) and !is.infinite(x).
+
+is.finite:    Returns TRUE if x is not infinite and not missing.
+              Returns FALSE otherwise.
+is.infinite:  Returns TRUE if x is either -Inf or Inf.
+              Returns FALSE otherwise.
+
+2. Read the source code for dplyr::near() (Hint: to see the source code, drop the ()). How does it work?
+
+```{r}
+dplyr::near
+print(paste0("Tolerance: ", .Machine$double.eps^0.5, sep = ""))
+```
+If the absolute value of the difference between two numbers
+is less than the tolerance, then return TRUE, else FALSE.
+
+3. A logical vector can take 3 possible values. How many possible values can an integer vector take? How many possible values can a double take? Use google to do some research.
+
+An integer vector can take an infinite number of values, because
+a vector can have any length
+
+You can find all of this information using ?.Machine:
+
+  * An integer can take 2^31-1 values (including negative values).
+  * A double has 53 bits of significand and 11 bits of exponent.
+    This adds up to 64 bits, so a double can take 2^64 - 1 values.
+
+4. Brainstorm at least four functions that allow you to convert a double to an integer. How do they differ? Be precise.
+
+  * as.integer: truncates doubles if they fit within 32 bits.
+                If not, returns NA.
+  * floor:      returns a truncated double.
+                Wrap it in as.integer to get an integer.
+  * ceiling:    returns a double.
+                Wrap it in as.integer to get an integer.
+  * trunc:      truncates doubles, returns a double.
+                Wrap it in as.integer to get an integer.
+```{r}
+x <- 1 # If you don't include the L suffix, this is a double
+typeof(x)
+typeof(as.integer(x))
+typeof(floor(x))
+typeof(ceiling(x))
+typeof(trunc(x))
+```
+
+5. What functions from the readr package allow you to turn a string into logical, integer, and double vector?
+
+  * logical: readr::parse_logical
+  * integer: readr::parse_integer
+  * double:  readr::parse_double
+
+## 20.4 Using atomic vectors
+
+### 20.4.1 Coercion
+
+How to convert from one type to another, 
+and when that happens automatically.
+  
+  + Explicit conversion using as.logical(), as.integer(), 
+    as.double(), or as.character().
+    Consider changing the code upstream instead of
+    explicit conversion.
+  + Implicit conversion occurs when you use a vector in a context
+    that expects a certain type of vector.
+    Most important type of this is using a logical vector in a
+    numeric context. TRUE becomes 1, FALSE becomes 0.
+    - sum(logical vector) = sum(TRUE values)
+    - mean(logical vector) = proportion of TRUE values.
+```{r}
+x <- sample(20, 100, replace = TRUE) # sample 100 values from 1:20,
+                                     # with replacement
+y <- x > 10
+sum(y)  # How many values were > 10
+mean(y) # Proportion of values > 10
+```
+
+Sometimes, integer to logical conversion is used like this.
+Here 0 is converted to FALSE, anything else to TRUE:
+if (length(x)) { do something }. Instead, do this:
+if (length(x) > 0) { do something }. This is more explicit.
+
+When you use c to create a vector with multiple types,
+the resulting vector uses the most complex type given to it.
+
+### 20.4.2 Test functions
+
+How to tell if an object is a specific type of vector?
+The purrr functions is_* provides consistent results compared to
+the base R functions of is.*.
+
+Function | lgl | int | double | chr | list
+-------- | --- | --- | ------ | --- | ----
+is_logical | x |     |        |     |
+is_integer |   |  x  |        |     |
+is_double  |   |     |    x   |     |
+is_numeric |   |  x  |    x   |     |
+is_character|  |     |        |  x  |
+is_atomic |  x |  x  |    x   |  x  |
+is_list   |    |     |        |     |  x
+is_vector |  x |  x  |    x   |  x  |  x
+
+### 20.4.3 Scalars and recycling rules
+
+What happens when you work with vectors of different lengths.
+The smaller length vectors are coerced to the larger length,
+before the operation between them takes place. This is called
+recycling. Since such clever code can conceal hidden problems,
+tidyverse does not allow anything execpt a scalar to recycle.
+Any vector will need to be recycled using the rep function.
+```{r}
+1:10 + 1:2
+# Produces error: 
+# Column `y`. ℹ Only values of size one are recycled.
+# tibble(x = 1:4, y = 1:2)
+tibble(x = 1:4, y = rep(1:2, 2))
+tibble(x = 1:4, y = rep(1:2, each = 2))
+```
+
+R does not have scalars. A value of 1 is actually a double inside
+a vector of length 1. Most functions in R are vectorized.
+That's why these computations work:
+```{r}
+sample(10) + 100
+runif(10) > 0.5
+```
+
+### 20.4.4 Naming vectors
+
+Any element of a vector can be named:
+```{r}
+c(x = 1, y = 2, z = 4)
+```
+Or, after the fact with purrr::set_names:
+```{r}
+set_names(1:3, c("a", "b", "c"))
+```
+Named vectors are most useful for subsetting.
+
+### 20.4.5 Subsetting
+
+So far, we have used dplyr::filter function for subsetting tibbles.
+For vectors, we use the [ operator.
+
+You can subset a vector with:
+
+  * an integer vector of:
+    + all positive values: extract values at those positions.
+      By repeating position values inside the vector, you can
+      get a longer vector
+    + all negative values: drop values at those positions.
+    + the zero value: returns no value. This helps create
+      unusual data structures to test your functions with.
+
+```{r}
+x <- c("one", "two", "three", "four", "five")
+x[c(3, 2, 5)]
+x[c(1, 2, 2, 3, 3, 1, 1, 5, 5)]
+x[c(-1, -3, -5)]
+
+# Produces:
+# Error in x[c(-1, 1)] : only 0's may be mixed with 
+# negative subscripts
+# x[c(-1, 1)]
+x[0]
+```
+
+  * Subsetting with a logical vector keeps all values where the
+    positional value is TRUE
+```{r}
+x <- c(10, 3, NA, 5, 8, 1, NA)
+x[!is.na(x)]
+x[x %% 2 == 0] # Gets all even or missing values of x
+```
+    
+  * A named vector can be subset with a character vector
+```{r}
+x <- c(abc = 1, def = 2, xyz = 5)
+x[c("xyz", "def")]
+```
+  * The simplest form of subsetting is nothing, x[], which
+    returns the entire x vector. This is useful for 2d matrices:
+    + x[1, ] returns the first row with all columns
+    + x[, -1] returns all rows, and all columns except the first.
+    
+An important variation of [ function is the [[ function.
+It only ever extracts a single element, and always drops names.
+The distinction between [ and [[ is important for lists.
+
+### 20.4.6 Exercises
+
+1. What does mean(is.na(x)) tell you about a vector x? What about sum(!is.finite(x))?
+
+mean(is.na(x)): Proportion of NAs in x
+sum(!is.finite(x)): Number of Inf, -Inf or NA in x
+
+2. Carefully read the documentation of is.vector(). What does it actually test for? Why does is.atomic() not agree with the definition of atomic vectors above?
