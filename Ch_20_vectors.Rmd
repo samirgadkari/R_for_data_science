@@ -479,4 +479,233 @@ There are three principles:
 
 ### 20.5.2 Subsetting
 
+Three ways of subsetting a list:
+
+  * [ extracts a sub-list and wraps it in another list which 
+    is returned.
+  * [[ extracts a component of the list and returns it.
+    You can only put 1 index/name between the [[]].
+    If you put in a name, it has to be quoted.
+  * $ can extract named list values. It's similar to [[,
+    except, you don't need to quote the name
+
+![](images/subsetting_a_list.png)
+
+```{r}
+a <- list(a = 1:3, b = "a string", c = pi, d = list(-1, -5))
+str(a[1])      # returns list(a = c(1L, 2L, 3L))
+str(a[1:2])    # returns list(a = c(1L, 2L, 3L), b = "a string")
+str(a[4])      # returns list(d = list(-1, -5))
+```
+
+```{r}
+str(a[[1]])      # returns c(1L, 2L, 3L)
+str(a[[4]])      # returns list(-1, -5)
+str(a[[4]][1])   # returns list(-1)
+str(a[[4]][[1]]) # returns -1
+```
+
+### 20.5.4 Exercises
+
+1. Draw the following lists as nested sets:
+
+  list(a, b, list(c, d), list(e, f))
+  a, b, [c, d], [e, f]
+  
+  list(list(list(list(list(list(a))))))
+  [[[[[[a]]]]]]
+
+2. What happens if you subset a tibble as if you’re subsetting a list? What are the key differences between a list and a tibble?
+
+[] returns a tibble
+[[]] returns the value, as with a list
+```{r}
+x <- tibble(a = 1:3, b = c("p", "q", "r"), c = 4:6)
+x
+
+x[2]    # returns a tibble with one column
+x[2:3]  # returns a tibble with 2 columns
+x[[1]]    # returns a list
+x[[1]][1] # returns a list
+x[[2]][1] # returns a list
+x[[1]][[1]] # returns a value
+x[[2]][[1]] # returns a value
+```
+
+## 20.6 Attributes
+
+  * attributes are named list of vectors attached to a vector
+  * attr function gets/sets individual attributes
+  * attributes function shows all attributes
+
+```{r}
+x <- 1:10
+attr(x, "greeting")
+
+attr(x, "greeting") <- "Hi!"
+attr(x, "farewell") <- "Bye!"
+attributes(x)
+```
+
+Three important attributes:
+
+  * names: used to name elements of a vector
+  * dims: used to specify dimensions of a vector.
+          This makes a matrix work like an array.
+          This won't be covered in this book.
+  * class: used to implement the S3 object oriented system.
+           class controls how generic functions work.
+           
+If you type in a function name, and it has a call to UseMethod,
+this means:
+
+  * the function you typed in is a generic function
+  * it will call a specific method based on the class of the 
+    first argument
+
+```{r}
+as.Date
+```
+
+You can list all methods for a generic (or class?) using methods:
+```{r}
+methods("as.Date")
+```
+If x is a character vector, as.Date will call as.Date.character.
+If x is a factor, as.Date will call as.Date.factor.
+You can see the specific implementation of a method
+with getS3method:
+```{r}
+getS3method("as.Date", "default")
+```
+```{r}
+getS3method("as.Date", "numeric")
+```
+print, [, [[, and $ are important S3 generic functions.
+
+## 20.7 Augmented vectors
+
+When you add attributes to vectors, we call those 
+augmented vectors. Class is one attribute that they have
+in common. The augmented vectors we will look at are:
+
+  * Factors
+  * Dates
+  * Date-times
+  * Tibbles
+
+### 20.7.1 Factors
+
+Factors represent categorical data that take a fixed set of
+possible values. They're built on top of integers, and have
+a levels attribute.
+```{r}
+x <- factor(c("ab", "cd", "ab"), 
+            levels = c("ab", "cd", "ef"))
+typeof(x)
+attributes(x)
+```
+
+### 20.7.2 Dates and date-times
+
+Dates are numeric vectors that represent dates since 1 Jan 1970.
+```{r}
+x <- as.Date("1971-01-01")
+unclass(x)
+typeof(x)
+attributes(x)
+```
+
+Date-times are numeric vectors with class POSIXct that represent 
+time since 1 Jan 1970.
+```{r}
+x <- lubridate::ymd_hm("1970-01-01 01:00")
+unclass(x)
+typeof(x)
+attributes(x)
+```
+
+The tzone only controls how the time is printed, not what the
+absolute time refers to. When you change the tzone attribute,
+the printed time will change accordingly.
+```{r}
+x
+attr(x, "tzone") <- "US/Pacific"
+x
+attr(x, "tzone") <- "US/Eastern"
+x
+```
+Another date-time type is POSIXlt. These are built on top of
+named lists:
+```{r}
+y <- as.POSIXlt(x)
+typeof(y)
+attributes(y)
+```
+POSIXlt's are rare in the tidyverse. You don't need them.
+Lubridate gives you helpers to do this instead. If you see a
+POSIXlt, convert it to a regular date-time using
+lubridate::as_date_time function.
+
+### 20.7.3 Tibbles
+
+Tibbles are augmented lists with these attributes:
+
+  * tbl_df
+  * tbl
+  * data.frame
+  * names (column)
+  * row.names
+
+Tibbles require each vector in it to have the same length.
+All functions that work with tibbles enforce this requirement.
+```{r}
+tb <- tibble(x = 1:5, y = 5:1)
+typeof(tb)
+attributes(tb)
+```
+
+Traditional dataframes have the same structure, but the class is
+different. The class of tibble includes the "data.frame", which
+means they inherit the regular data frame behavior by default.
+```{r}
+df <- data.frame(x = 1:5, y = 5:1)
+typeof(df)
+attributes(df)
+```
+
+### 20.7.4 Exercises
+
+1. What does hms::hms(3600) return? How does it print? What primitive type is the augmented vector built on top of? What attributes does it use?
+
+The augmented vector is built on top of a double that stores the
+seconds since 1 Jan 1970. The other answers are here:
+```{r}
+x <- hms::hms(3600)
+x
+typeof(x)
+attributes(x)
+```
+
+2. Try and make a tibble that has columns with different lengths. What happens?
+
+```{r}
+# tb <- tibble(x = 1:5, y = 1:3)
+# Returns:
+# Error: Tibble columns must have compatible sizes.
+tb2 <- tibble(x = 1:5, y = 1) # You can use recycling on single
+                              # value here to get equal number
+                              # of rows.
+tb2
+```
+
+3. Based on the definition above, is it ok to have a list as a column of a tibble?
+
+As long as the lists are of the same length, it should work:
+```{r}
+x <- tibble(x = list(1, 2, 3), y = list('a', 'b', 'c'))
+x
+x[[1]]
+x[[2]]
+```
 
