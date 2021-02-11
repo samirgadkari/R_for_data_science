@@ -1,0 +1,21 @@
+---
+title: "Ch_22_Introduction_to_models"
+author: "Samir Gadkari"
+date: "2/10/2021"
+output: html_document
+---
+
+A model provides a low-dimensional summary of a dataset.
+It ignores noise and extracts the signal of the phenomena of interest.
+We will only go into supervised models, and that too only
+mechanistically. The theory is not going to be part of this book.
+
+We also don't provide any tools for accessing the models.
+
+## 22.1 Hypothesis generation vs. hypothesis confirmation
+
+We will use models as a tool for exploration.
+
+Usually models are used for inference. If you do this without
+doing exploration, you will remain blind to the quality problems
+within your data.
