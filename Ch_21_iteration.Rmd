@@ -335,12 +335,12 @@ output_double
 If only some elements of the vector are named, you will
 get an error "subscript out of bounds":
 ```{r}
-x <- c(a = 1, 2, b = 3)
-output <- vector("integer", length(x))
-for (nm in names(x)) {
-  output[[i]] <- x[[nm]] * 10L
-}
-output
+# x <- c(a = 1, 2, b = 3)
+# output <- vector("integer", length(x))
+# for (nm in names(x)) {
+#   output[[i]] <- x[[nm]] * 10L
+# }
+# output
 ```
 
 If the vector has more than one element with the same name,
