@@ -1,0 +1,228 @@
+---
+title: "Ch_23_Model_basics"
+author: "Samir Gadkari"
+date: "2/10/2021"
+output: html_document
+---
+
+```{r results='hide'}
+library(tidyverse)
+library(modelr)
+library(ggplot2)
+
+# We want to get a warning if there are any NA values when
+# we run a function.
+options(na.action = na.warn)
+```
+
+The goal of a model is to provide a simple low-dimensional summary 
+of a dataset. In the context of this book we’re going to use models 
+to partition data into patterns and residuals. Strong patterns will
+hide subtler trends, so we’ll use models to help peel back layers 
+of structure as we explore a dataset.
+
+George Box said: "All models are wrong, but some are useful."
+He mentions that a cunningly chosen frugal model often provides
+useful approximations to the data.
+
+## 23.2 A simple model
+
+Let's look at the sim1 dataset from the modelr package:
+```{r}
+ggplot(sim1, aes(x, y)) +
+  geom_point()
+```
+
+Let's create some models with random slope and intercept:
+```{r}
+models <- tibble(
+  a1 = runif(250, -20, 40),
+  a2 = runif(250, -5, 5)
+)
+
+ggplot(sim1, aes(x, y)) +
+  geom_abline(aes(intercept = a1, slope = a2), 
+              data = models, 
+              alpha = 1 / 4) +
+  geom_point()
+```
+
+Let's find the best lines using the distance from the line to each
+point:
+```{r}
+model1 <- function(a, data) {
+  a[1] + a[2] * data$x
+}
+
+measure_distance <- function(mod, data) {
+  diff <- data$y - model1(mod, data)
+  sqrt(mean(diff^2))
+}
+
+sim1_dist <- function(a1, a2) {
+  measure_distance(c(a1, a2), sim1)
+}
+
+models <- models %>%
+  mutate(dist = purrr::map2_dbl(a1, a2, sim1_dist))
+models
+```
+
+```{r}
+ggplot(sim1, aes(x, y)) +
+  geom_point(size = 2, color = "grey30") +
+  geom_abline(
+    aes(intercept = a1, slope = a2, color = -dist),
+    data = filter(models, rank(dist) <= 10)
+  )
+```
+
+We can look at these models as points on a graph of a1 vs a2:
+```{r}
+ggplot(models, aes(a1, a2)) +
+  geom_point(data = filter(models, rank(dist) <= 10),
+             size = 4, color = 'red') +
+  geom_point(aes(color = -dist))
+```
+
+Instead of slope and intercept coefficients created randomly,
+let's create them on a grid:
+```{r}
+grid <- expand.grid(  # Creates a df from all combinations of
+                      # parameters provided to it.
+  a1 = seq(-5, 20, length = 25),
+  a2 = seq(1, 3, length = 25)
+  ) %>%
+  mutate(dist = purrr::map2_dbl(a1, a2, sim1_dist))
+
+grid %>%
+  ggplot(aes(a1, a2)) +
+  geom_point(data = filter(grid, rank(dist) <= 10),
+             size = 4, color = "red") +
+  geom_point(aes(color = -dist))
+```
+
+Overlaying the best 10 models on the data:
+```{r}
+ggplot(sim1, aes(x, y)) +
+  geom_point(size = 2, color = "grey20") +
+  geom_abline(aes(intercept = a1, slope = a2, color = -dist),
+              data = filter(grid, rank(dist) <= 10))
+```
+
+All of them look like a close match. You can make the grid 
+finer and finer until you get an exact match. A better way is to
+use the Newton-Raphson search. It goes down the slope of the
+error surface until the change in error is low. We can use
+optim function to do that:
+```{r}
+best <- optim(c(0, 0), # initial values for params to optimize over
+              measure_distance, # function to calculate error
+              data = sim1)
+best$par
+```
+```{r}
+ggplot(sim1, aes(x, y)) +
+  geom_point(size = 2, color = "grey30") +
+  geom_abline(aes(intercept = best$par[1], slope = best$par[2]))
+```
+
+There’s one more approach that we can use for this model, 
+because it’s a special case of a broader family: linear models. 
+A linear model has the general form 
+y = a_1 + a_2 * x_1 + a_3 * x_2 + ... + a_n * x_(n - 1).
+
+R has a tool specifically designed for fitting linear models 
+called lm(). lm() has a special way to specify the model family:
+formulas. Formulas look like y ~ x, which lm() will translate 
+to a function like y = a_1 + a_2 * x.
+
+```{r}
+sim1_mod <- lm(y ~ x, data = sim1)
+coef(sim1_mod)
+```
+
+lm function actually finds the closest model in a single step.
+It is faster than optim, and guarantees a global minimum.
+
+### 23.2.1 Exercises
+
+1. One downside of the linear model is that it is sensitive to unusual values because the distance incorporates a squared term. Fit a linear model to the simulated data below, and visualise the results. Rerun a few times to generate different simulated datasets. What do you notice about the model?
+```{r}
+x = rep(1:10, each = 3)
+y = x * 1.5 + 6 + rt(length(x),  # rt generates t-style variates
+                                 # with length given by param 1.
+                     df = 2)     # Degrees of freedom.
+
+# To simulate an unusual value, let's change the value of the end
+# of the model to beyond 75th percentile + 3 * IQR. 
+# Usually, 75th percentile + 1.5 * IQR is used to determine outliers.
+y[[length(y)]] <- quantile(y)[[4]] + 15 * IQR(y)
+
+sim1a <- tibble(
+  x = x,
+  y = y
+)
+
+sim1a_mod <- lm(y ~ x, data = sim1a)
+ggplot(sim1a, aes(x, y)) +
+  geom_point(color = "grey30") +
+  geom_abline(aes(intercept = coef(sim1a_mod)[[1]],
+                  slope = coef(sim1a_mod)[[2]]))
+```
+
+You can see that the model is pulling the line up at the right because
+of the outlier. Let's see how much it is off by limiting the y range
+of the plot:
+```{r}
+ggplot(sim1a, aes(x, y)) +
+  geom_point(color = "grey30") +
+  geom_abline(aes(intercept = coef(sim1a_mod)[[1]],
+                  slope = coef(sim1a_mod)[[2]])) +
+  coord_cartesian(ylim = c(-20, 40))
+```
+Now you can actually see how off the line is.
+
+Note that we had to push the outlier a lot. Usually, the formula
+for finding an outlier is:
+
+  * anything higher than 75th percentile + 1.5 * IQR or
+  * anything lower than 75th percentile - 1.5 * IQR
+
+We used a large outlier because it is not visible to see an
+outlier around 1.5 * IQR.
+
+We had a single value that was high. Imagine if there were more
+outliers, how the slope would change. Instead of the squared
+error, when faced with outliers, you can choose to use 
+absolute value of the error. This way the line is not pulled
+so much.
+
+2. One way to make linear models more robust is to use a different distance measure. For example, instead of root-mean-squared distance, you could use mean-absolute distance. Use optim() to fit this model to the simulated data above and compare it to the linear model.
+```{r}
+measure_distance <- function(mod, data) {
+  diff <- data$y - model1(mod, data)
+  mean(abs(diff))
+}
+
+best <- optim(c(0, 0), measure_distance, data = sim1a)
+
+coef(sim1a)
+ggplot(sim1a, aes(x, y)) +
+  geom_point(color = "grey30", size = 2) +
+  geom_abline(aes(intercept = best$par[1], 
+                  slope = best$par[2]),
+              color = "red") +
+  geom_abline(aes(intercept = coef(sim1a_mod)[[1]],
+                  slope = coef(sim1a_mod)[[2]]),
+              color = "green")
+```
+The red line (using the mean-absolute distance) is pulled less by the outlier. Thus it is a better fit to the other points.
+
+3. One challenge with performing numerical optimisation is that it’s only guaranteed to find one local optimum. What’s the problem with optimising a three parameter model like this?
+```{r}
+model1 <- function(a, data) {
+  a[1] + data$x * a[2] + a[3]
+}
+```
+In the above model, a[1] + a[3] is the intercept. How much of the intercept value is split between a[1] and a[3] cannot be determined.
