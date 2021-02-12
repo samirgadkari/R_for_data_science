@@ -5,6 +5,15 @@ date: "2/10/2021"
 output: html_document
 ---
 
+```{css, echo = FALSE}
+body {
+  background-color: black;
+  filter: invert(1);
+}
+table {
+  empty-cells: hide;
+}
+```
 ```{r results='hide'}
 library(tidyverse)
 library(modelr)
@@ -226,3 +235,291 @@ model1 <- function(a, data) {
 }
 ```
 In the above model, a[1] + a[3] is the intercept. How much of the intercept value is split between a[1] and a[3] cannot be determined.
+If there was another variable multiplying a[3], like say x^2,
+then we could find the individual values of the best a[1] and a[3].
+
+## 23.3 Visualizing models
+
+Once you have a model you can:
+
+  * look at the model coefficients and the equation to understand
+    the pattern the model captured
+  * understand the model by looking at it's predictions.
+    This is the pattern that the model has captured.
+  * understand the model by looking at it's residuals.
+    Residuals are the amounts of data the model has not captured.
+    This allows us to remove the larger patterns in a dataset
+    to get to the subtler variations.
+    
+### 23.3.1 Predictions
+
+Let's generate an evenly-spaced grid of values that covers where
+our data lies. We use modelr::data_grid for this:
+```{r}
+grid <- sim1 %>%
+  data_grid(x)
+grid
+```
+
+Then we add predictions to the model using modelr::add_predictions.
+```{r}
+grid <- grid %>%
+  add_predictions(sim1_mod) # adds predictions to a dataset by
+                            # calculating y values at given x values.
+grid
+```
+
+Next we plot the predictions. The reason we do this instead of using
+geom_abline is that we can use this for all models, not just
+the linear models.
+
+For more ideas on visualizing complex models, see:
+[Visualizing complex models](http://vita.had.co.nz/papers/model-vis.html)
+
+```{r}
+ggplot(sim1, aes(x)) +
+  geom_point(aes(y = y)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 1)
+```
+
+### 23.3.2 Residuals
+
+Residuals are the amounts of data that the model has not captured.
+They're just the distances between the observed and predicted
+values.
+
+Add residuals to the model using modelr::add_residuals:
+```{r}
+sim1 <- sim1 %>%
+  add_residuals(sim1_mod)
+sim1
+```
+
+To understand residuals, draw frequency polygons of the residuals.
+```{r}
+ggplot(sim1, aes(resid)) +
+  geom_freqpoly(binwidth = 0.5)
+```
+
+This tells you how far away from the data is your model.
+Note that the average of your residuals will always be 0.
+Usually, you want to re-create plots using just the residuals.
+```{r}
+ggplot(sim1, aes(x, resid)) +
+  geom_ref_line(h = 0) + # draw thick horiz reference line at 0.
+                         # v = 5 to draw vertical ref line at 5.
+  geom_point()
+```
+This looks like random noise, meaning our model has done a good job
+of capturing the patterns in the dataset.
+
+### 23.3.3 Exercises
+
+1. Instead of using lm() to fit a straight line, you can use loess() to fit a smooth curve. Repeat the process of model fitting, grid generation, predictions, and visualisation on sim1 using loess() instead of lm(). How does the result compare to geom_smooth()?
+```{r}
+# Restore sim1 to original condition by dropping resid
+sim1 <- sim1 %>% select(x, y)
+
+# Fit using loess
+sim1_loess_mod <- loess(y ~ x, sim1)
+sim1_loess_mod
+
+grid <- sim1 %>%
+  data_grid(x) %>%
+  add_predictions(sim1_loess_mod)
+
+ggplot(sim1, aes(x)) +
+  geom_point(aes(y = y)) +
+  geom_line(aes(y = pred), data = grid, color = "red", size = 2) +
+  geom_smooth(aes(y = pred), data = grid, color = "green", size = 1)
+
+sim1 <- sim1 %>%
+  add_residuals(sim1_loess_mod)
+
+sim1 %>%
+  ggplot(aes(resid)) +
+  geom_freqpoly(binwidth = 0.5)
+
+ggplot(sim1, aes(x, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
+```
+Now the y-axis scale is a little narrower. This means the lowess
+function is a better fit. It does this by calculating a different
+polynomial for each section of the input curve. If you want to
+get an even better fit, you can change the span parameter.
+Note though, that you shouldn't overfit, otherwise your model will
+work excellently for the training dataset, and really bad for the
+testing dataset.
+
+The geom_smooth function almost exactly matches the loess model.
+
+2. add_predictions() is paired with gather_predictions() and spread_predictions(). How do these three functions differ?
+
+  * add_predictions mutates the dataframe by adding predictions in a
+    new column called pred.
+  * spread_predictions mutates the dataframe by adding one prediction
+    for each model
+  * gather_predictions mutates the dataframe by adding 2 columns 
+    (.model, and .pred) and repeats the input rows for each model.
+    
+3. What does geom_ref_line() do? What package does it come from? Why is displaying a reference line in plots showing residuals useful and important?
+
+geom_ref_line adds a reference line to the plot. If you give it the
+h parameter, a horizontal line is drawn at the value of the h param.
+With a v param, a vertical line is drawn at the value of the v param.
+
+A model creates a function that splits the difference between points
+above the function and points below it. The reference line is drawn
+at y = 0 for residuals. If the residuals are not equally above the
+line as below it, there is a bias in the model, and we should
+try and stop this bias.
+
+4. Why might you want to look at a frequency polygon of absolute residuals? What are the pros and cons compared to looking at the raw residuals?
+
+The frequency polygon plot is a histogram of the residuals.
+We expect this plot to be centered at 0, and be similar to a 
+normal distribution. If it is not, our model may have bias, and we
+should make sure we remove that bias before proceeding.
+
+## 23.4 Formulas and model families
+
+In R, formulas provide a general way of getting “special behaviour”.
+Rather than evaluating the values of the variables right away, they 
+capture them so they can be interpreted by the function.
+
+R converts formulas to functions. 
+y ~ x is converted to y = a_1 + a_2 * x
+Give the model_matrix function a dataframe and a formula, and it will
+return the columns of the matrix:
+```{r}
+df <- tribble(
+  ~y, ~x1, ~x2,
+   4,   2,   5,
+   5,   1,   6
+)
+
+model_matrix(df, y ~ x1)
+```
+The matrix shows the intercept of 1 for each row of data.
+This intercept value is multiplied by a_1.
+The value x1 is multiplied by a_2, thus completing the calculation.
+If you don't want the intercept, use y ~ x - 1 as the formula.
+
+As you add more variables to the formula, the model matrix grows
+as expected:
+```{r}
+model_matrix(df, y ~ x1 + x2)
+```
+
+For more details, see Symbolic Description of factorial models
+for analysis of variance by Wilkinson and Rogers at:
+[Symbolic factorial models](https://www.jstor.org/stable/2346786)
+
+### 23.4.1 Categorical variables
+
+A formula like y ~ sex is converted to:
+y = x_0 + x_1 * sex_male where sex_male = 1 if male, 0 otherwise.
+
+```{r}
+df <- tribble(
+  ~sex, ~response,
+  "male",       1,
+  "female",     2,
+  "male",       1
+)
+
+model_matrix(df, response ~ sex)
+```
+
+Let's look at some data and models:
+```{r}
+ggplot(sim2) +
+  geom_point(aes(x, y))
+```
+```{r}
+mod2 <- lm(y ~ x, data = sim2)
+
+grid <- sim2 %>%
+  data_grid(x) %>%
+  add_predictions(mod2)
+grid
+```
+So a model with a categorical x will predict the mean value of
+each category, because the mean minimizes the root-mean-square
+distance.
+
+```{r}
+ggplot(sim2, aes(x)) +
+  geom_point(aes(y = y)) +
+  geom_point(data = grid, aes(y = pred), color = "red", size = 4)
+```
+
+You can't make predictions about levels you didn't observe:
+```{r}
+# This raises an error:
+# factor x has new level e
+#
+# tibble(x = "e") %>%
+#  add_predictions(mod2)
+```
+
+### 23.4.2 Interactions (continuous and categorical)
+
+What happens when you combine a continuous and a categorical variable?
+```{r}
+ggplot(sim3, aes(x1, y)) +
+  geom_point(aes(color = x2))
+```
+
+Two possible models we can use to fit this:
+```{r}
+mod1 <- lm(y ~ x1 + x2, data = sim3)
+mod2 <- lm(y ~ x1 * x2, data = sim3)
+```
+
+The x1 + x2 model will estimate each effect independent of the others.
+The y ~ x1 * x2 model is converted to the function:
+y = a_0 + a_1 * x1 + a_2 * x2 + x_12 * x1 * x2
+The x_12 * x1 * x2 is the interaction term, but note that it also
+contains the independent terms.
+
+To visualize these models, we need two tricks:
+
+  * data_grid needs to get both x1 and x2 so it can generate all
+    combinations of values of the two
+  * gather_predictions will update the dataframe with two columns:
+    + one to show which model the prediction came from
+    + second to show the value of the prediction
+    
+```{r}
+grid <- sim3 %>%
+  data_grid(x1, x2) %>%
+  gather_predictions(mod1, mod2)
+grid
+```
+
+Now we can plot both model results at once using facet_wrap:
+```{r}
+ggplot(sim3, aes(x1, color = x2)) +
+  geom_point(aes(y = y), size = 2) +
+  geom_line(data = grid, aes(y = pred)) +
+  facet_wrap(~ model)
+```
+
+Which model is better? Let's look at the residuals.
+```{r}
+sim3 <- sim3 %>%
+  gather_residuals(mod1, mod2)
+
+ggplot(sim3, aes(x1, resid, color = x2)) +
+  geom_point() +
+  facet_grid(model ~ x2)
+```
+We can see for mod1 that there is some pattern in b and d.
+This means mod1 did not capture this pattern.
+For mod2, there is no pattern.
+This means that mod2 did capture the pattern.
+So we would naturally prefer mod2 to mod1.
+
+### 23.4.3 Interactions (two continuous)
