@@ -5,6 +5,15 @@ date: "2/10/2021"
 output: html_document
 ---
 
+```{css, echo = FALSE}
+body {
+  background-color: black;
+  filter: invert(1);
+}
+table {
+  empty-cells: hide;
+}
+```
 A model provides a low-dimensional summary of a dataset.
 It ignores noise and extracts the signal of the phenomena of interest.
 We will only go into supervised models, and that too only

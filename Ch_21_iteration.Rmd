@@ -5,6 +5,15 @@ date: "2/7/2021"
 output: html_document
 ---
 
+```{css, echo = FALSE}
+body {
+  background-color: black;
+  filter: invert(1);
+}
+table {
+  empty-cells: hide;
+}
+```
 ```{r results='hide'}
 library(tidyverse)
 ```
