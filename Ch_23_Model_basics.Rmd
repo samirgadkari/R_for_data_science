@@ -600,3 +600,167 @@ You need to consider both the x1 and x2 values to get y.
 
 ### 23.4.4 Transformations
 
+To use transformations inside the formula 
+(ex. log(y) ~ sqrt(x1) + x2)
+
+  * If you're using + - * ^ wrap it inside an I(), so it is not
+    considered part of the model spec.
+    ex. y ~ I(x ^ 2)
+  * In 
+    y ~ x * x + x, x * x is the interaction of x with itself,
+    which is just x. So this formula becomes 
+    y ~ x. 
+    If you wanted to use a square term, use 
+    y ~ I(x ^ 2) instead
+  * Redundant terms are dropped. In 
+    y ~ x * x + x, since x * x is just x, we get
+    y ~ x + x, which then becomes
+    y ~ x
+  * If you forget the I() around x ^ 2,
+    y ~ x ^ 2 + x becomes
+    y ~ x * x + x which then becomes
+    y ~ x + x which is
+    y ~ x
+You can always use the model matrix to see what equation lm is fitting
+```{r}
+df <- tribble(
+  ~x,   ~y,
+   1,    1,
+   2,    2,
+   3,    3
+)
+model_matrix(df, y ~ x^2 + x)
+model_matrix(df, y ~ I(x^2) + x)
+```
+
+Taylor's theorem says that you can approximate any smooth function
+with an infinite sum of polynomials. Since typing
+y = a_1 + a_2 * x + a_3 * x^2 + a_4 * x ^ 3
+by hand is tedious, R provides the poly function:
+```{r}
+model_matrix(df, y ~ poly(x, 2))
+```
+Unfortunately, beyond the range of your data, polynomials shoot off
+to infinity. Instead, use the splines::ns function:
+```{r}
+library(splines)
+model_matrix(df, y ~ ns(x, 2))
+```
+
+Example:
+```{r}
+sim5 <- tibble(
+  x = seq(0, 3.5 * pi, length = 50),
+  y = 4 * sin(x) + rnorm(length(x))
+)
+
+ggplot(sim5, aes(x, y)) +
+  geom_point()
+```
+
+Fitting 5 models to this data:
+```{r}
+mod1 <- lm(y ~ ns(x, 1), data = sim5)
+mod2 <- lm(y ~ ns(x, 2), data = sim5)
+mod3 <- lm(y ~ ns(x, 3), data = sim5)
+mod4 <- lm(y ~ ns(x, 4), data = sim5)
+mod5 <- lm(y ~ ns(x, 5), data = sim5)
+
+grid <- sim5 %>%
+  data_grid(x = seq_range(x, n = 50, expand = 0.1)) %>%
+  gather_predictions(mod1, mod2, mod3, mod4, mod5, .pred = "y")
+
+ggplot(sim5, aes(x, y)) +
+  geom_point() +
+  geom_line(data = grid, color = "red") +
+  facet_wrap(~ model)
+```
+
+Extrapolation beyond the data is pretty bad. This is the downside
+of approximating a function with a model. The model can never tell you
+if the behavior is true beyond your data range.
+
+### 23.4.5 Exercises
+
+1. What happens if you repeat the analysis of sim2 using a model without an intercept. What happens to the model equation? What happens to the predictions?
+```{r}
+mod1 <- lm(y ~ x, data = sim2)
+mod2 <- lm(y ~ x - 1, data = sim2)
+
+grid <- sim2 %>%
+  data_grid(x) %>%
+  gather_predictions(mod1, mod2)
+
+ggplot(sim2, aes(x)) +
+  geom_point(aes(y = y)) +
+  geom_point(data = grid, aes(y = pred), color = "red", size = 4) +
+  facet_wrap(~ model)
+```
+It's the same as with the intercept, since we're not using the
+intercept - just finding the mean value for each categorical x
+(x = a, x = b, etc.) value in the data.
+
+2. Use model_matrix() to explore the equations generated for the models I fit to sim3 and sim4. Why is * a good shorthand for interaction?
+```{r}
+sim3
+mod1 <- lm(y ~ x1 + x2, data = sim3)
+mod2 <- lm(y ~ x1 * x2, data = sim3)
+model_matrix(sim3, y ~ x1 + x2)
+model_matrix(sim3, y ~ x1 * x2)
+```
+Since x1 is numeric and x2 is categorical, we get 1 coefficient
+for x1 and 3 coefficients for x2 (x2b, x2c, x2d) and an intercept.
+The intercept is always 1. Each categorical level is converted
+into x2b, x2c, x2d values being 000 for a, 100 for b, 010 for c,
+and 001 for d. This makes sense, because when x2 is a, there is no
+reason to have b, c, and d being represented - just a.
+
+For y ~ x1 * x2, we get 1 coefficient for x1 and 3 coefficients for
+x2 (x2b, x2c, x2d) and an intercept. We also get the interaction
+variables x1:x2b, x1:x2c and x1:x2d.
+
+* is a good shorthand for interaction because multiplying two values
+is a combination to produce the output. Here also the two variables
+are interacting (combining) to produce the output.
+
+3. Using the basic principles, convert the formulas in the following two models into functions. (Hint: start by converting the categorical variable into 0-1 variables.)
+
+mod1 <- lm(y ~ x1 + x2, data = sim3)
+y = intercept + a_1 * x1 + x2 * x2
+
+mod2 <- lm(y ~ x1 * x2, data = sim3)
+y = intercept + a_1 * x1 + a_2 * x2 + a_3 * x1 * x2
+
+4. For sim4, which of mod1 and mod2 is better? I think mod2 does a slightly better job at removing patterns, but it’s pretty subtle. Can you come up with a plot to support my claim?
+
+```{r}
+sim4
+
+mod1 <- lm(y ~ x1 + x2, sim4)
+mod2 <- lm(y ~ x1 * x2, sim4)
+
+grid <- sim4 %>%
+  select(x1, x2) %>%
+  gather_predictions(mod1, mod2)
+
+grid['pred_minus_actual'] = abs(grid$pred - sim4$y)
+grid
+
+ggplot(grid, aes(x1, x2)) +
+  geom_tile(aes(fill = pred_minus_actual)) +
+  facet_wrap(~ model)
+```
+It's very difficult to see the difference between the models using
+a plot. Instead, let us use the sum of absolute errors for each
+model:
+```{r}
+grid %>%
+  select(model, pred_minus_actual) %>%
+  group_by(model) %>%
+  summarize(sum_pred_minus_actual = sum(pred_minus_actual))
+```
+So yes, model 2 is better than model 1 (at least it has a better fit).
+
+## 23.5 Missing values
+
+
