@@ -46,3 +46,184 @@ perfection, it will not fit the test data well.
 
 ## 24.2 Why are low quality diamonds more expensive?
 
+```{r}
+ggplot(diamonds, aes(cut, price)) + geom_boxplot()
+ggplot(diamonds, aes(color, price)) + geom_boxplot()
+ggplot(diamonds, aes(clarity, price)) + geom_boxplot()
+```
+x-axis values in the cut and clarity plots above go from worse on 
+the left to best on the right. For color, the plot goes from worse
+on the right to best on the left.
+
+### 24.2.1 Price and carat
+
+Lower-quality diamonds tend to be larger in size (carat), which 
+makes their price higher.
+```{r}
+ggplot(diamonds, aes(carat, price)) +
+  geom_hex(bins = 50)
+```
+
+We will fit a model to remove the effect of carat. First, we will
+make our dataset easier to work with by:
+
+  1. Filter out diamonds > 2.5 carats. This gives us 99.7% of all
+     diamonds in the dataset
+  2. Log-transform the carat and price variables. This makes the
+     pattern linear, and linear patterns are easier to work with
+```{r}
+diamonds2 <- diamonds %>%
+  filter(carat <= 2.5) %>%
+  mutate(lprice = log2(price), lcarat = log2(carat))
+
+ggplot(diamonds2, aes(lcarat, lprice)) +
+  geom_hex(bins = 50)
+```
+
+Let's fit a model to the pattern:
+```{r}
+mod_diamond <- lm(lprice ~ lcarat, data = diamonds2)
+```
+
+```{r}
+grid <- diamonds2 %>% # start with diamonds2 so we limit to
+                      # carat <= 2.5
+  data_grid(carat = seq_range(carat, 20)) %>%
+  mutate(lcarat = log2(carat)) %>% # we do this even when diamonds2
+                                   # has this data, because diamonds2
+                                   # data is over the carats from the
+                                   # diamonds dataset. We have just
+                                   # created carat = seq_range() which
+                                   # samples evenly across carats.
+                                   # So these sample values are
+                                   # different from diamonds2 lcarat.
+  add_predictions(mod_diamond, "lprice") %>%
+  mutate(price = 2 ^ lprice)
+
+ggplot(diamonds2, aes(carat, price)) +
+  geom_hex(bins = 50) +
+  geom_line(data = grid, color = "red", size = 1)
+```
+
+Now let's look at the residuals:
+```{r}
+diamonds2 <- diamonds2 %>%
+  add_residuals(mod_diamond, "lresid")
+
+ggplot(diamonds2, aes(lcarat, lresid)) +
+  geom_hex(bins = 50)
+```
+
+Now we can re-do our original plots using the residuals instead of
+the price:
+```{r}
+ggplot(diamonds2, aes(cut, lresid)) + geom_boxplot()
+ggplot(diamonds2, aes(color, lresid)) + geom_boxplot()
+ggplot(diamonds2, aes(clarity, lresid)) + geom_boxplot()
+```
+
+Now we see what we expect - the better diamonds need a better price.
+Since our residuals are in log2, a -1 residual means the price is
+1/2 of our model's expected price. A residual of 1 means the price is
+2 times our model's expected price.
+
+### 24.2.2 A more complicated model
+
+We could move the effects we have observed into the model to make them
+more explicit, and add other variables:
+```{r}
+mod_diamond2 <- 
+  lm(lprice ~ lcarat + color + cut + clarity, # Notice, we're using
+                                              # lcarat to get lprice.
+                    # This is how we build the model from previous
+                    # knowledge.
+     data = diamonds2)
+```
+Our 4 predictors will make it difficult to visualize. Fortunately,
+they're independent, so we can plot them separately. To make the
+process easier, we will use .model parameter of data.grid. When it is
+added to data_grid, any predictors needed for the model that are not
+present are filled in with typical values. Typical values are:
+
+  * median for numeric and ordered factors
+  * most frequent value for factors, characters, and logicals
+  * It returns all values when there is a tie.
+  * NA values are dropped silently.
+```{r}
+grid <- diamonds2 %>%
+  data_grid(cut, .model = mod_diamond2) %>%
+  add_predictions(mod_diamond2)
+grid
+```
+```{r}
+ggplot(grid, aes(cut, pred)) +
+  geom_point()
+```
+
+```{r}
+diamonds2 <- diamonds2 %>%
+  add_residuals(mod_diamond2, "lresid2")
+
+ggplot(diamonds2, aes(lcarat, lresid2)) +
+  geom_hex(bins = 50)
+```
+
+Since a residual of 2 indicates a diamond 2^2 or 4 x the expected
+price. Let's look at unusual values individually:
+```{r}
+diamonds2 %>%
+  filter(abs(lresid2) > 1) %>%
+  add_predictions(mod_diamond2) %>%
+  mutate(pred = round(2 ^ pred)) %>%
+  select(price, pred, carat:table, x:z) %>%
+  arrange(price)
+```
+
+We don't see anything here, but it is good to check. The difference
+could be an opportunity to buy a diamond cheaper than expected.
+The difference is usually due to an error in the data.
+
+### 24.2.3 Exercises
+
+1. In the plot of lcarat vs. lprice, there are some bright vertical strips. What do they represent?
+
+They are bright because they represent carats of 1/2, 1, 1.5, 2, etc.
+To get these values, use the lcarat value representing the vertical
+strip and do: 2^lcaret.
+People usually buy known carat sized diamonds, rather than 0.612 ct,
+for example. Instead they prefer 1/2 carat so they can say so to their
+friends. Also, why would you buy a 0.612 ct, and then say it is 1/2 ct.
+
+2. If log(price) = a_0 + a_1 * log(carat), what does that say about the relationship between price and carat?
+
+Because the relationship is using logs in a linear equation,
+it is exponential in nature.
+
+3. Extract the diamonds that have very high and very low residuals. Is there anything unusual about these diamonds? Are they particularly bad or good, or do you think these are pricing errors?
+
+```{r}
+ggplot(diamonds2, aes(lresid2)) +
+  geom_histogram(bins = 50)
+```
+From this we see that the diamonds at lresid2 > 1 and lresid2 < -0.75
+may have some interest. Let's filter those out:
+```{r}
+plot_it <- function(x, x_name) {
+  diamonds2 %>%
+    add_predictions(mod_diamond2, var = "lpred2") %>%
+    mutate(is_unusual = lresid2 > 1 | lresid2 < -0.75) %>%
+    ggplot(aes(x, price)) +
+    geom_point(alpha = 1 / 10) +
+    geom_point(data = filter(diamonds2, lresid2 > 1 | lresid2 < -0.75),
+               color = "red", size = 4, alpha = 1/2) +
+    xlab(x_name)
+}
+
+plot_it(carat, "carat")
+plot_it(cut, "cut")
+plot_it(clarity, "clarity")
+```
+```{r}
+diamonds2
+```
+
