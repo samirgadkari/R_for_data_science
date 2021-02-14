@@ -802,6 +802,8 @@ We focused on linear models. Linear models assume the residuals have
 a normal distribution. Other models are:
 
   * Linear models: ex. stats::lm
+    Assumes relation of this form:
+      y = a_1 * x1 + a_2 * x2 + ... + a_n * xn
     Assumes y is continuous.
     Assumes residuals (error) have a normal distribution.
   * Generalised linear models: ex. stats::glm
