@@ -739,6 +739,9 @@ sim4
 mod1 <- lm(y ~ x1 + x2, sim4)
 mod2 <- lm(y ~ x1 * x2, sim4)
 
+# Instead of using the data_grid function,
+# we get a grid using the same values as x1 and x2.
+# This lets us compare the predictions to the actual values.
 grid <- sim4 %>%
   select(x1, x2) %>%
   gather_predictions(mod1, mod2)
@@ -763,4 +766,66 @@ So yes, model 2 is better than model 1 (at least it has a better fit).
 
 ## 23.5 Missing values
 
+R's default modelling behavior is to drop missing values silently.
+By using options(na.action = na.warn) at the beginning of the code,
+we specified that R should always warn when it sees a missing value.
 
+```{r}
+df <- tribble(
+  ~x,   ~y,
+   1,  2.2,
+   2,   NA,
+   3,  3.5,
+   4,  8.3,
+  NA,   10
+)
+
+mod <- lm(y ~ x, data = df)
+```
+To suppress warnings globally:
+options(na.action = na.ignore)
+
+To suppress warnings locally:
+```{r}
+mod <- lm(y ~ x, data = df, na.action = na.exclude)
+```
+
+nobs(mod) shows you how many observations were used. You can compare
+it to the number of rows of the dataframe.
+```{r}
+nobs(mod)
+```
+
+## 23.6 Other model families
+
+We focused on linear models. Linear models assume the residuals have
+a normal distribution. Other models are:
+
+  * Linear models: ex. stats::lm
+    Assumes y is continuous.
+    Assumes residuals (error) have a normal distribution.
+  * Generalised linear models: ex. stats::glm
+    y can be continuous or discrete
+    They create a distance metric based on likelihood.
+  * Generalised additive models: ex. mgcv::gam
+    Extends glm to incorporate arbitrary smooth functions.
+    So your y ~ s(x) formula becomes y = f(x) function which allows
+    gam() to build smoothness into the function based on smoothness
+    constraints to make the problem tractable.
+  * Penalised linear models: ex. glmnet::glmnet
+    Adds a penalty term based on the length of the parameter vector
+    that penalizes complex models.
+    This allows the model to generalise better.
+  * Robust linear models: ex. MASS::rlm
+    rlm models tweak the distance to downweight points that are far
+    away. This makes them robust to outliers at the cost of being
+    not quite so good when there are no outliers.
+  * Trees: ex. rpart::rpart
+    They piece a piecewise constant model, splitting the data into
+    progressively smaller and smaller pieces. Trees in aggregate
+    are very powerful (ex. Random forests randomForest::randomForest,
+    or Gradient Boosting Machines xgboost::xgboost)
+    
+These models work the same as the Linear models from a programming
+perspective. Once you've mastered the mechanics of one model, you can
+apply the same mechanics to use other models.
