@@ -1,0 +1,48 @@
+---
+title: "Ch_24_Model_building"
+author: "Samir Gadkari"
+date: "2/14/2021"
+output: html_document
+---
+
+```{css, echo = FALSE}
+body {
+  background-color: black;
+  filter: invert(1);
+}
+table {
+  empty-cells: hide;
+}
+```
+
+```{r}
+library(tidyverse)
+library(modelr)
+options(na.action = na.warn)
+
+library(nycflights13)
+library(lubridate)
+```
+
+We will:
+
+  * find a pattern with visualizations.
+  * Make the pattern concrete with a model.
+  * Then repeat this process using the residuals
+  
+This allows your implicit knowledge in your head to become explicit 
+models which can be reused by others.
+
+Another method is to use the predictive power of models to find one
+that matches best. This will get you a good pattern match, but you
+won't know why. You cannot then make decisions from the model.
+
+For most models, you will probably use the approach in this chapter
+combined with the predictive model approach in the last paragraph.
+
+If your model is not working, throw it away and start with a fresh approach.
+If your model is good enough, maybe you're done. If you tweak it to
+perfection, it will not fit the test data well.
+
+## 24.2 Why are low quality diamonds more expensive?
+
