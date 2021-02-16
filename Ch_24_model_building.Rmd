@@ -5,16 +5,6 @@ date: "2/14/2021"
 output: html_document
 ---
 
-```{css, echo = FALSE}
-body {
-  background-color: black;
-  filter: invert(1);
-}
-table {
-  empty-cells: hide;
-}
-```
-
 ```{r}
 library(tidyverse)
 library(modelr)
@@ -526,6 +516,7 @@ sat_terms <- function(date) {
 # in the data:
 #   * multiple identical rows/columns of the dataset
 #   * dataset has a factor where some levels don't have instances
+# We should use the data_grid for that.
 mod_sat_terms <- lm(n ~ wday * sat_terms(date), 
                     data = with_resid_mod3)
 
@@ -538,3 +529,143 @@ with_resid_mod3 %>%
 ```
 It looks like the wday * sat-term model is not as good as
 wday * term. The wday * term model's residuals are closer to 0.
+
+4. Create a new wday variable that combines the day of week, term (for Saturdays), and public holidays. What do the residuals of that model look like?
+```{r}
+term <- function(date) {
+  cut(
+    date,
+    breaks = ymd(20130101, 20130605, 20130825, 20140101),
+    labels = c("spring", "summer", "fall")
+  )
+}
+
+holidays <- c(ymd(20130101), ymd(20130704), ymd(20131128), 
+             ymd(20131225), ymd(20131226))
+names(holidays) <- c("New Years", "Independence day", "Thanksgiving",
+                     "Christmas Day", "Day after Christmas")
+all_of_2013 <- as.list(seq(ymd(20130101), ymd(20131231), by = "day"))
+for (i in seq_along(all_of_2013)) {
+  date <- all_of_2013[[i]]
+  if (date %in% holidays) {
+    all_of_2013[i] <- names(holidays)[which(date %in% holidays)]
+  } else if (wday(date) == 7) {
+    out <- str_c(as.character(wday(date, label = TRUE)), 
+                              as.character(term(date)),
+                              sep = "-")
+    all_of_2013[i] <- out
+  } else {
+    all_of_2013[i] <- as.character(wday(date, label = TRUE))
+  }
+}
+
+with_resid_mod3["all_of_2013"] <- as_vector(all_of_2013)
+
+mod_sat_holidays <- MASS::rlm(n ~ all_of_2013, data = with_resid_mod3)
+
+grid <- with_resid_mod3 %>%
+  data_grid(all_of_2013) %>%
+  add_predictions(mod_sat_holidays)
+
+with_resid_mod3 %>%
+  ggplot(aes(all_of_2013)) +
+  geom_boxplot(aes(y = n)) +
+  geom_point(data = grid, aes(y = pred), 
+             color = "red", size = 4) +
+  coord_flip()
+```
+
+This looks better, because the predictions are within the IQR.
+Also, note that only New Years is shown - the other holidays are probably too
+many to display on the screen at the same time. We could filter the data
+and see them if we like.
+
+Let's see the residuals.
+
+```{r}
+with_resid_mod3 %>%
+  add_residuals(mod_sat_holidays) %>%
+  ggplot(aes(date, resid)) +
+  geom_hline(yintercept = 0, size = 2, color = "white") +
+  geom_line()
+```
+This looks like a better model. The sharp spikes are lower in magnitude,
+while the rest of the residuals look the same as the wday * sat_terms(date) model.
+
+5. What happens if you fit a day of week effect that varies by month (i.e. n ~ wday * month)? Why is this not very helpful?
+```{r}
+daily["month"] <- month(daily$date, label = TRUE)
+mod_wday_month <- MASS::rlm(n ~ wday * month, data = daily)
+
+daily %>%
+  data_grid(wday, month) %>%
+  add_predictions(mod_wday_month) %>%
+  ggplot(aes(wday, month)) +
+  geom_tile(aes(fill = pred))
+
+daily %>%
+  add_residuals(mod_wday_month) %>%
+  ggplot(aes(date, resid)) +
+  geom_ref_line(h = 0) +
+  geom_line()
+```
+This is helpful for a large number of days, except for the holidays.
+Since holidays occur in 1-day or 2-day durations, a month predictor is not useful.
+
+6. What would you expect the model n ~ wday + ns(date, 5) to look like? Knowing what you know about the data, why would you expect it to be not particularly effective?
+
+This model will not be very useful because we're smoothing over 5 days. This includes
+a weekend day most of the time - only when we're smoothing over M-F will it not
+include a weekend day. Since we're also not using wday interaction with the spline,
+it will not be very helpful.
+
+7. We hypothesised that people leaving on Sundays are more likely to be business travellers who need to be somewhere on Monday. Explore that hypothesis by seeing how it breaks down based on distance and time: if it’s true, you’d expect to see more Sunday evening flights to places that are far away.
+```{r}
+flights
+
+# Let's say sunday evening starts from 3pm. Since we're expecting flights going
+# far away, travelers may leave early - unless they want to spend more time with
+# family. Let's see what the 3pm onwards start time gives us.
+
+make_datetime_100 <- function(year, month, day, time) {
+  make_datetime(year, month, day, time %/% 100, time %% 100)
+}
+
+flights %>%
+  mutate(
+    date_time = make_datetime_100(year, month, day, sched_dep_time),
+    evening = hour(date_time) > 15
+  ) %>%
+  filter(wday(date_time, label = TRUE) == "Sun") %>%
+  group_by(evening) %>%
+  ggplot() +
+  geom_hex(aes(x = hour(date_time), y = distance))
+```
+Looks like Sunday evenings are not busy. Maybe what is happening is that fliers
+are leaving Sunday evening, but are taking one short flight to a hub airport,
+and continuing from there. We don't know about their other flights, so we cannot
+use their actual travel distance.
+
+8. It’s a little frustrating that Sunday and Saturday are on separate ends of the plot. Write a small function to set the levels of the factor so that the week starts on Monday.
+```{r}
+weekday <- flights %>%
+  mutate(
+    date_time = make_datetime_100(year, month, day, dep_time),
+    wday = wday(date_time, label = TRUE)
+  ) %>%
+  select(wday, everything())
+
+week_starts_monday <- function(data) {
+  fct_relevel(data, "Sun", after = 7) # Moves Sun to after the last level
+}
+levels(week_starts_monday(weekday$wday))
+```
+
+## 24.4 Learning more about models
+
+  * Statistical Modeling: A Fresh Approach by Danny Kaplan
+  * An Introduction to Statistical Learning by Gareth James, Daniela Witten, 
+    Trevor Hastie, and Robert Tibshirani
+  * Elements of Statistical Learning by Trevor Hastie, Robert Tibshirani, 
+    and Jerome Friedman
+  * Applied Predictive Modeling by Max Kuhn and Kjell Johnson
