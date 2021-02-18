@@ -391,4 +391,162 @@ gapminder %>%
 
 ### 25.4.2 From vectorised functions
 
+Some useful functions take an atomic vector and create a list.
+ex. stringr::str_split. If this is used inside mutate,
+you will get a list-column.
 
+```{r}
+df <- tribble(
+  ~x1,
+  "a, b, c",
+  "d, e, f, g"
+)
+
+df %>%
+  mutate(x2 = stringr::str_split(x1, ","))
+```
+
+unnest can help here:
+
+```{r}
+df %>%
+  mutate(x2 = stringr::str_split(x1, ",")) %>%
+  unnest(x2)
+```
+
+Check out tidyr::separate_rows which is a wrapper around this pattern.
+It takes the data and a separator to separate the delimited values.
+
+Another example of this is when using map, map2, and pmap from purrr:
+
+```{r}
+sim <- tribble(
+  ~f,      ~params,
+  "runif", list(min = -1, max = 1),
+  "rnorm", list(sd = 5),
+  "rpois", list(lambda = 10)
+)
+
+sim %>%
+  mutate(sims = invoke_map(f, params, n = 10))
+```
+
+Note that sims contains both double and integer vectors,
+so it is not homogeneous. It is unlikely to cause problems,
+since both types are numeric.
+
+### 25.4.3 From multivalued summaries
+
+summarise function only works with functions that return a single value.
+So you can't use it with quantile:
+```{r}
+mtcars %>%
+  group_by(cyl) %>%
+  summarise(q = quantile(mpg))
+```
+
+But you can wrap the result in a list !!
+```{r}
+mtcars %>%
+  group_by(cyl) %>%
+  summarise(q = list(quantile(mpg)))
+```
+
+To use this with unnest, you should also capture the probabilities:
+```{r}
+probs <- c(0.01, 0.25, 0.5, 0.75, 0.99)
+
+mtcars %>%
+  group_by(cyl) %>%
+  mutate(p = list(probs), q = list(quantile(mpg))) %>%
+  unnest(c(p, q))
+```
+
+### 25.4.4 From a named list
+
+Suppose you want to iterate over a column, and you also want to
+iterate over the elements of a list which is in another column,
+at the same time.
+You can create a dataframe with one column being the singletons,
+and the other column being the list using tibble::enframe.
+```{r}
+x <- list(
+  a = 1:5,
+  b = 3:4,
+  c = 5:6
+)
+
+df <- enframe(x)
+df
+```
+
+To iterate over the names and value in parallel:
+```{r}
+df %>%
+  mutate(smry = map2_chr(name, value, ~stringr::str_c(.x, ": ", .y[1])))
+```
+
+### 25.4.5 Exercises
+
+1. List all the functions that you can think of that take a atomic vector and return a list.
+
+Many functions in the stringr package return a list:
+str_split, str_match_all
+
+map, map2 functions also return a list
+
+2. Brainstorm useful summary functions that, like quantile(), return multiple values.
+
+range function
+
+3. What’s missing in the following data frame? How does quantile() return that missing piece? Why isn’t that helpful here?
+
+We're missing probabilities of the quantiles. We can return these using
+names = TRUE in the quantile function. But these names show up inside
+each element of the q column. They're not available as a separate column.
+
+quantile can return the names with names = TRUE, but we cannot have two
+LHS values, only one. So, instead, we pull the names out after the
+summarise with map(q, names). The problem with this is that all the
+quantile names are in the names column per quantile value.
+
+```{r}
+mtcars %>%
+  group_by(cyl) %>%
+  summarise(
+    q = list(quantile(mpg, names = TRUE))
+  ) %>%
+  mutate(names = map(q, names)) %>%
+  unnest(q)
+```
+
+4. What does this code do? Why might might it be useful?
+
+Usually, mtcars %>% group_by(cyl) %>% nest() will:
+  
+  * group by cyl
+  * nest all columns related to each cyl value into a tibble,
+    under the data column
+    
+mtcars %>% group_by(cyl) %>% summarise_all(list) does:
+
+  * group by cyl
+  * places a list of doubles into the cell for cyl row and mpg column.
+    Does the same for each column (disp, hp, ...).
+    All groups are converted to lists.
+This is useful when applying transforms to grouped columns.
+map can be applied to a single column for transforming it.
+map2 can take two columns and apply a function that
+  
+  * uses values from both columns to create a new value
+  * joins values from both columns into a new value
+  
+```{r}
+x <- mtcars %>%
+  group_by(cyl) %>%
+  summarise_all(list)
+
+x
+```
+
+## 25.5 Simplifying list-columns
