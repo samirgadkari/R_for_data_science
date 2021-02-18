@@ -276,3 +276,119 @@ glance %>%
   geom_jitter(width = 0.5)
 ```
 
+2. Explore other methods for visualising the distribution of R2 per continent. You might want to try the ggbeeswarm package, which provides similar methods for avoiding overlaps as jitter, but uses deterministic methods.
+
+```{r}
+library(ggbeeswarm)
+
+glance %>%
+  ggplot(aes(continent, r.squared)) +
+  geom_quasirandom(alpha = 1 / 3)
+```
+
+3. To create the last plot (showing the data for the countries with the worst model fits), we needed two steps: we created a data frame with one row per country and then semi-joined it to the original dataset. It’s possible to avoid this join if we use unnest() instead of unnest(.drop = TRUE). How?
+
+All we needed from the join was lifeExp. Since we already have it in data,
+we can unnest data and use it.
+```{r}
+glance %>%
+  unnest(data) %>%
+  filter(r.squared < 0.25) %>%
+  ggplot(aes(year, lifeExp, color = country)) +
+  geom_line()
+```
+
+## 25.3 List-columns
+
+A data frame is a named list of equal length vectors.
+A list is a vector, so it can be used as a column of a dataframe.
+Base R does not allow you to create list-columns easily, and
+data.frame treats a list as a list of columns:
+```{r}
+data.frame(x = list(1:3, 3:5))
+```
+
+You can prevent data.frame from doing this with I, but the
+result doesn't print well:
+```{r}
+data.frame(x = I(list(1:3, 3:5)),
+           y = c("1, 2", "3, 4, 5"))
+```
+
+Tibble alleviates this by being lazy, not modifying it's inputs,
+and printing better:
+
+```{r}
+tibble(x = list(1:3, 3:5),
+       y = c("1, 2", "3, 4, 5"))
+```
+
+Tribble is even easier, since it can automatically work out
+that you need a list:
+
+```{r}
+tribble(
+  ~x,    ~y,
+  1:3,   "1, 2",
+  3:5,   "3, 4, 5"
+)
+```
+
+List-columns are most useful as an intermediate data structure.
+Since base R works with atomic vectors and data frames,
+it may be a hassle, but still worth it to keep data in
+list-columns.
+
+3 parts of an effective list-column pipeline:
+
+  1. Create a list-column using:
+     * nest
+     * summarise + list
+     * mutate + a map function
+  2. Create other intermediate list-columns by transforming
+     list-columns using map, map2, pmap
+  3. Simplify the list-column back down to a dataframe
+     or atomic vector
+     
+## 25.4 Creating list-columns
+
+Typically you create list-columns using:
+
+  1. tidyr::nest to convert a grouped dataframe into a nested
+     dataframe where you have list-columns
+  2. mutate and vectorised functions that return a list
+  3. summarise and summary functions that return multiple results
+You could also create them using tibble::enframe and a named list,
+but this is not usual.
+
+Generally, list-columns should have the same type for all items.
+
+### 25.4.1 With nesting
+
+nest() creates a nested dataframe where:
+
+  * each row is a meta-observation
+  * some columns give variables that define the observation
+  * the list-column of dataframes gives the individual
+    observations that make up the meta-observation
+
+When nest is applied to grouped dataframes, it keeps the
+grouping columns as is, and bundles everything into the list-column:
+
+```{r}
+gapminder %>%
+  group_by(country, continent) %>%
+  nest()
+```
+
+You can also apply nest to an ungrouped dataframe by specifying
+which columns to nest:
+
+```{r}
+gapminder %>%
+  nest(data = c(year : gdpPercap))
+```
+
+### 25.4.2 From vectorised functions
+
+
