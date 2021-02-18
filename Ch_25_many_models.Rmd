@@ -152,6 +152,12 @@ repeated country and continent (all the columns that were used
 to group the original dataframe - just as expected, since this
 is the opposite of nest).
 
+```{r}
+resids$data[[1]]
+```
+
+The data still contains the embedded tibble for each country.
+
 Now we can plot the residuals:
 
 ```{r}
@@ -175,4 +181,98 @@ that there are large residuals in Africa. We should
 look there too.
 
 ### 25.2.4 Model quality
+
+The broom package provides some functions to turn models
+into tidy data. broom::glance extracts model quality metrics:
+```{r}
+broom::glance(nz_mod)
+```
+
+```{r}
+glance <- by_country %>%
+  mutate(glance = map(model, broom::glance)) %>%
+  unnest(glance)
+glance
+```
+
+Now we start looking for models that don't fit well:
+
+```{r}
+glance %>%
+  arrange(r.squared)
+```
+
+The worst-fit models appear to be all in Africa. Let's double check
+with a plot. We will jitter the observations so they can all be seen.
+
+```{r}
+glance %>%
+  ggplot(aes(continent, r.squared)) +
+  geom_jitter(width = 0.5)
+```
+
+Let's look at the bad fit countries:
+
+```{r}
+bad_fit <- glance %>% filter(r.squared < 0.25)
+
+gapminder %>%
+  semi_join(bad_fit, by = "country") %>%
+  ggplot(aes(year, lifeExp, color = country)) +
+  geom_line()
+```
+
+These are the results of two tragedies: AIDS, and Rwandan genocide.
+
+### 25.2.5 Exercises
+
+1. A linear trend seems to be slightly too simple for the overall trend. Can you do better with a quadratic polynomial? How can you interpret the coefficients of the quadratic? (Hint you might want to transform year so that it has mean zero.)
+
+The way to get a mean zero for the year is to subtract the mean
+from each year value.
+
+```{r}
+country_model <- function(df) {
+  lm(lifeExp ~ poly(mean_0_year + mean_0_year, 2), data = df)
+}
+
+by_country <- gapminder %>%
+  group_by(country, continent) %>%
+  mutate(mean_0_year = year - mean(year)) %>%
+  nest()
+
+by_country <- by_country %>%
+  mutate(
+    model = map(data, country_model),
+    resids = map2(data, model, add_residuals)
+  )
+
+unnest(by_country, resids) %>%
+  ggplot(aes(year, resid)) +
+  geom_line(aes(group = country), alpha = 1 / 3) +
+  geom_smooth(se = FALSE)
+```
+
+
+Let's look at the residuals for Africa:
+```{r}
+glance <- by_country %>%
+  mutate(glance = map(model, broom::glance)) %>%
+  unnest(glance)
+
+glance %>%
+  arrange(r.squared) %>%
+  filter(r.squared < 0.25)
+```
+
+Now there is only one country with R^2 < 0.25. It is Rwanda - which
+must be because of the genocide.
+
+Let's plot R^2 for each continent:
+
+```{r}
+glance %>%
+  ggplot(aes(continent, r.squared)) +
+  geom_jitter(width = 0.5)
+```
 
