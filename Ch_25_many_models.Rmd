@@ -176,7 +176,7 @@ resids %>%
   facet_wrap(~ continent)
 ```
 
-Looks like we're missing some mild patterns overall, 
+Looks like we're missing some mild patterns overall, and
 that there are large residuals in Africa. We should
 look there too.
 
@@ -286,7 +286,7 @@ glance %>%
   geom_quasirandom(alpha = 1 / 3)
 ```
 
-3. To create the last plot (showing the data for the countries with the worst model fits), we needed two steps: we created a data frame with one row per country and then semi-joined it to the original dataset. It’s possible to avoid this join if we use unnest() instead of unnest(.drop = TRUE). How?
+3. To create the last plot (showing the data for the countries with the worst model fits), we needed two steps: we created a data frame with one row per country and then semi-joined it to the original dataset. It’s possible to avoid this join. How?
 
 All we needed from the join was lifeExp. Since we already have it in data,
 we can unnest data and use it.
@@ -416,6 +416,8 @@ df %>%
 
 Check out tidyr::separate_rows which is a wrapper around this pattern.
 It takes the data and a separator to separate the delimited values.
+If convert = TRUE, it will even convert numeric/integer/logical values
+to the appropriate type.
 
 Another example of this is when using map, map2, and pmap from purrr:
 
@@ -511,16 +513,31 @@ summarise with map(q, names). The problem with this is that all the
 quantile names are in the names column per quantile value.
 
 ```{r}
+name_quantile <- function(x) {
+  names <- names(x)
+  
+  # This is ugly - but I don't yet know how to apply
+  # the [[]] operator over a map. If x has a length
+  # different from 5, this would be a problem.
+  # The map would take care of it.
+  values <- c(x[[1]], x[[2]], x[[3]], x[[4]], x[[5]])
+  list(names, values)
+}
+
 mtcars %>%
   group_by(cyl) %>%
   summarise(
     q = list(quantile(mpg, names = TRUE))
   ) %>%
-  mutate(names = map(q, names)) %>%
-  unnest(q)
+  mutate(separated = map(q, name_quantile)) %>%
+  mutate(
+    names = map(separated, function(x) { x[[1]] }),
+    percentiles = map(separated, function(x) { x[[2]] })
+  ) %>%
+  unnest(c(names, percentiles))
 ```
 
-4. What does this code do? Why might might it be useful?
+4. What does this code do? Why might it be useful?
 
 Usually, mtcars %>% group_by(cyl) %>% nest() will:
   
@@ -550,3 +567,110 @@ x
 ```
 
 ## 25.5 Simplifying list-columns
+
+Simplify the list-column into a regular column with atomic vector
+as elements:
+
+  * to get a single value (column), use mutate with:
+    + map_lgl, map_int, map_dbl, map_chr
+  * to get multiple values (columns), use unnest.
+    This will repeat the rows multiple times
+    
+### 25.5.1 List to vector
+
+```{r}
+df <- tribble(
+  ~x,
+  letters[1:5],
+  1:3,
+  runif(5)
+)
+
+df %>%
+  mutate(
+    type = map_chr(x, typeof),
+    length = map_int(x, length)
+  )
+```
+
+This will allow you to filter out parts of a heterogeneous list-column.
+
+You can use the map_* shortcuts - ex. map_chr(x, "apple") will
+get you the string stored in the name apple for each element of x.
+This helps pull apart nested lists into regular columns.
+If an element is missing, and you don't want NULL returned,
+use the .null argument.
+```{r}
+df <- tribble(
+  ~x,
+  list(a = 1, b = 2),
+  list(a = 2, c = 4)
+)
+
+df %>%
+  mutate(
+    a = map_dbl(x, "a"),
+    b = map_dbl(x, "b", .null = NA_real_)
+  )
+```
+
+### 25.5.2 Unnesting
+
+Unnesting works by repeating the elements of the regular columns
+for each value of the list-column.
+```{r}
+tibble(x = 1:2, y = list(1:4, 1)) %>% unnest()
+```
+
+This means you cannot unnest two columns that contain
+a different number of elements.
+```{r}
+df1 <- tribble(
+  ~x,        ~y,     ~z,
+  1, c("a","b"),    1:2,
+  2,        "c",      3
+)
+df1
+df1 %>% unnest(c(y, z)) # Works because 2 values in row 1 for 
+                        # y and z. Also 1 value in row 2.
+                        # So the x value can repeat 2 times for row 1
+                        # and 1 times for row 2.
+```
+
+```{r}
+df2 <- tribble(
+  ~x,        ~y,     ~z,
+  1,        "a",    1:2,
+  2, c("b","c"),      3
+)
+df2
+df2 %>% unnest(c(y, z)) # Gives a result by duplicating the second column.
+                        # Is this unusual?
+```
+
+### 25.5.3 Exercises
+
+1. Why might the lengths() function be useful for creating atomic vector columns from list-columns?
+
+lengths function returns the length of each element of a list.
+It can be useful shortcut to map_int(x, length).
+Also, you can see if the lengths of the elements of a list
+are equal.
+
+2. List the most common types of vector found in a data frame. What makes lists different?
+
+integer, double, character, logical, factor are usually found in
+dataframes.
+list is different because it contains more than one value,
+and the type of each contained value can be different (heterogeneous).
+
+## 25.6 Making tidy data with broom
+
+The broom package has 3 different ways of turning models into tidy dataframes:
+
+  1. broom::glance(model) returns a row for each model with 
+     columns giving model quality (R^2, adjusted R^2, etc.)
+  2. broom:tidy(model) returns a row for each coefficient of the model.
+     Each column gives information about the estimate, or it's variability.
+  3. broom::augment(model, data) returns a row for each data row,
+     adding values like residuals and influence statistics.
