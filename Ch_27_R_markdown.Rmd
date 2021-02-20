@@ -105,3 +105,35 @@ consider the xtable, stargazer, pander, tables, and ascii packages.
 
 ### 27.4.4 Caching
 
+Normally, every knit starts with a completely clean slate.
+To cache a chunk, use cache = TRUE. This chunk's output is saved to a
+special file on disk. The next time Knitr runs, if this chunk's code
+has not changed, the output will be used instead of running the chunk.
+If a chunk depends on output of a chunk earlier, it should use
+dependson = "name of chunk it depends on".
+dependson should contain a character vector of every chunk it depends on.
+
+```{r raw_data}
+# rawdata <- readr::read_csv("a_very_large_file.csv")
+```
+
+```{r processed_data, cache=TRUE, dependson="raw_data"}
+# processed_data <- rawdata %>% 
+#   filter(!is.na(import_var)) %>% 
+#   mutate(new_variable = complicated_transformation(x, y, z))
+```
+
+If the "a_very_large_file.csv" changes, Knitr will not catch it.
+Knitr only catches changes within the Rmd file. To catch the file content
+change, use cache.extra:
+
+```{r raw_data, cache.extra = file.info("a_very_large_file.csv")}
+# rawdata <- readr::read_csv("a_very_large_file.csv")
+```
+
+Regularly clear out all your caches with knitr::clean_cache().
+It is easier to name each chunk after the primary object it creates.
+It makes it easier to understand the dependson chunk chain.
+
+### 27.4.5 Global options
+
